@@ -1,0 +1,15 @@
+# uncompyle6 version 3.5.1
+# Python bytecode 3.7 (3394)
+# Decompiled from: Python 3.7.5 (default, Oct 25 2019, 10:52:18)
+# [Clang 4.0.1 (tags/RELEASE_401/final)]
+# Embedded file name: /Users/Jon/Documents/2019/brass_quintet/inspect.py
+# Size of source mod 2**32: 71 bytes
+from compose import *
+import pickle
+piece = pickle.load(open('saves/pickles/piece.p', 'rb'))
+# print(piece.rdur_nCVI_max)
+print(piece.rdur_nCVI_max)
+print(piece.rspread_nCVI_max)
+print(piece.rtemp_density_min)
+print(piece.rr_min)
+# print(piece.instruments)

@@ -1,0 +1,63 @@
+Pitch Parameters
+
+Section 1: 
+Group 1: 
+pitch set: 0, 2, 8
+
+Group 2: 
+pitch set: 8
+
+Group 3: 
+pitch set: 0
+
+Group 4: 
+pitch set: 10, 7
+
+Group 5: 
+pitch set: 10, 7, 8
+
+
+Section 2: 
+Group 1: 
+pitch set: 3, 7, 2, 8
+
+Group 2: 
+pitch set: 7, 8, 3
+
+Group 3: 
+pitch set: 2, 7, 3, 10
+
+
+Section 3: 
+Group 1: 
+pitch set: 0, 2, 8, 7, 10
+
+
+Section 4: 
+Group 1: 
+pitch set: 2, 7, 8
+
+Group 2: 
+pitch set: 2, 8
+
+Group 3: 
+pitch set: 8, 7, 2
+
+
+Section 5: 
+Group 1: 
+pitch set: 10, 8, 2, 0, 7
+
+Group 2: 
+pitch set: 0, 7, 2
+
+Group 3: 
+pitch set: 10, 2, 7, 8, 0
+
+Group 4: 
+pitch set: 2, 7, 0, 8, 10
+
+Group 5: 
+pitch set: 7, 10, 2
+
+
