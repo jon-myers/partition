@@ -7,9 +7,9 @@
 from compose import *
 import pickle
 piece = pickle.load(open('saves/pickles/piece.p', 'rb'))
-# print(piece.rdur_nCVI_max)
-print(piece.rdur_nCVI_max)
-print(piece.rspread_nCVI_max)
-print(piece.rtemp_density_min)
-print(piece.rr_min)
-# print(piece.instruments)
+
+for section in piece.sections:
+    for group in section.groups:
+        print(group.reg_width)
+        print('')
+    print('')

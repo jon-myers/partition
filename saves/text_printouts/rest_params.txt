@@ -1,0 +1,186 @@
+
+Section Number: 1
+
+
+Group Number: 1
+
+Rest Ratio: 0.223
+Rest Duration nCVI: 9.808
+Rest Spread nCVI: 7.196
+Rest Temporal Density: 26.548
+
+
+Group Number: 2
+
+Rest Ratio: 0.331
+Rest Duration nCVI: 10.716
+Rest Spread nCVI: 9.121
+Rest Temporal Density: 29.221
+
+Section Number: 2
+
+
+Group Number: 1
+
+Rest Ratio: 0.359
+Rest Duration nCVI: 10.91
+Rest Spread nCVI: 13.705
+Rest Temporal Density: 25.061
+
+
+Group Number: 2
+
+Rest Ratio: 0.334
+Rest Duration nCVI: 12.221
+Rest Spread nCVI: 12.659
+Rest Temporal Density: 29.515
+
+Section Number: 3
+
+
+Group Number: 1
+
+Rest Ratio: 0.427
+Rest Duration nCVI: 8.884
+Rest Spread nCVI: 7.541
+Rest Temporal Density: 31.796
+
+Section Number: 4
+
+
+Group Number: 1
+
+Rest Ratio: 0.525
+Rest Duration nCVI: 10.978
+Rest Spread nCVI: 12.346
+Rest Temporal Density: 23.577
+
+
+Group Number: 2
+
+Rest Ratio: 0.442
+Rest Duration nCVI: 11.462
+Rest Spread nCVI: 11.457
+Rest Temporal Density: 28.906
+
+Section Number: 5
+
+
+Group Number: 1
+
+Rest Ratio: 0.551
+Rest Duration nCVI: 10.33
+Rest Spread nCVI: 2.067
+Rest Temporal Density: 28.489
+
+
+Group Number: 2
+
+Rest Ratio: 0.431
+Rest Duration nCVI: 10.264
+Rest Spread nCVI: 2.399
+Rest Temporal Density: 26.321
+
+Section Number: 6
+
+
+Group Number: 1
+
+Rest Ratio: 0.557
+Rest Duration nCVI: 8.587
+Rest Spread nCVI: 1.084
+Rest Temporal Density: 21.579
+
+
+Group Number: 2
+
+Rest Ratio: 0.465
+Rest Duration nCVI: 10.111
+Rest Spread nCVI: 1.514
+Rest Temporal Density: 19.054
+
+
+Group Number: 3
+
+Rest Ratio: 0.57
+Rest Duration nCVI: 10.086
+Rest Spread nCVI: 1.839
+Rest Temporal Density: 22.976
+
+Section Number: 7
+
+
+Group Number: 1
+
+Rest Ratio: 0.735
+Rest Duration nCVI: 11.317
+Rest Spread nCVI: 1.873
+Rest Temporal Density: 21.826
+
+
+Group Number: 2
+
+Rest Ratio: 0.661
+Rest Duration nCVI: 11.565
+Rest Spread nCVI: 1.636
+Rest Temporal Density: 21.276
+
+
+Group Number: 3
+
+Rest Ratio: 0.716
+Rest Duration nCVI: 10.288
+Rest Spread nCVI: 1.668
+Rest Temporal Density: 18.923
+
+
+Group Number: 4
+
+Rest Ratio: 0.674
+Rest Duration nCVI: 9.686
+Rest Spread nCVI: 2.009
+Rest Temporal Density: 28.783
+
+Section Number: 8
+
+
+Group Number: 1
+
+Rest Ratio: 0.623
+Rest Duration nCVI: 11.917
+Rest Spread nCVI: 3.863
+Rest Temporal Density: 23.305
+
+
+Group Number: 2
+
+Rest Ratio: 0.519
+Rest Duration nCVI: 11.182
+Rest Spread nCVI: 4.974
+Rest Temporal Density: 18.892
+
+
+Group Number: 3
+
+Rest Ratio: 0.609
+Rest Duration nCVI: 11.15
+Rest Spread nCVI: 5.915
+Rest Temporal Density: 21.381
+
+Section Number: 9
+
+
+Group Number: 1
+
+Rest Ratio: 0.6
+Rest Duration nCVI: 9.999
+Rest Spread nCVI: 13.625
+Rest Temporal Density: 23.002
+
+
+Group Number: 2
+
+Rest Ratio: 0.69
+Rest Duration nCVI: 9.477
+Rest Spread nCVI: 13.539
+Rest Temporal Density: 21.671

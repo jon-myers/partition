@@ -1,11 +1,12 @@
 from compose import *
 import numpy as np
+import pickle
 
-tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, 'darkgoldenrod')
+tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, 'gold')
 tr2 = Instrument('Trumpet 2', 'A3', 'A5', 2, 'forestgreen')
-hn = Instrument('Horn', 'C3', 'C5', 3, 'firebrick')
+hn = Instrument('Horn', 'C3', 'C5', 3, 'tomato')
 trb = Instrument('Trombone', 'G2', 'G4', 4, 'dodgerblue',)
-btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, 'blue')
+btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, 'mediumorchid')
 
 dur_tot = 14 * 60
 chord = [0, 2, 3, 7, 8, 10]
@@ -37,3 +38,4 @@ rr_min = 0.25
 
 piece = Piece(dur_tot, chord, insts, nos, rsw, ewob_max, td_min, td_oct, dyns,\
                 rr_max, rdm, rsm, rtd_min, rr_min)
+pickle.dump(piece, open('saves/pickles/piece.p', 'wb'))
