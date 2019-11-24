@@ -1,5 +1,0 @@
-__pache__
-orig_saves
-saves
-.DS_Store
-param_thinking.numbers
