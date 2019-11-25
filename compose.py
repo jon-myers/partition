@@ -5,7 +5,7 @@ from funcs import *
 import random, os, itertools, shutil, pickle
 
 class Instrument:
-    """'Object to collect all the relevant details of each individual instrument'"""
+    """Object to collect all the relevant details of each individual instrument"""
 
     def __init__(self, instrumentName, min, max, instnum, color):
         self.name = instrumentName
@@ -29,8 +29,36 @@ class Instrument:
         plt.tight_layout()
         plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
 
+class Phrase:
+    """Contains parametric info and generative methods for phrases"""
+
+    def __init__(self, instruments, start_time, duration, full_reg, reg_width, reg_center):
+        self.instruments = instruments
+        self.start_time = start_time
+        self.duration = duration
+        self.full_reg = full_reg
+        self.reg_width = reg_width
+        self.reg_center = reg_center
+        self.set_register()
+
+    def set_register(self):
+        rmin = min(self.full_reg)
+        rmax = max(self.full_reg)
+        max_extent = rmax - rmin
+        min_extent = 12
+        self.extent = int(round(lin_interp(self.reg_width, min_extent, max_extent)))
+        min_center = rmin + (self.extent/2)
+        max_center = rmax - (self.extent/2)
+        self.center = int(round(lin_interp(self.reg_center, min_center, max_center)))
+        self.register = range(int(self.center - (self.extent/2)), int(self.center + (self.extent/2)))
+
+
+
+
+
 class Group:
-    """'Object which contains all the parametric info for a given group'"""
+    """Contains parametric info and generative methods for a given group"""
+
     def __init__(
         self, instruments, pitch_set, weights, group_num, rest_ratio, \
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num, \
@@ -50,14 +78,54 @@ class Group:
         self.rtemp_density = rtemp_density
         self.stitch = 0
         self.section_num = section_num
-        os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
+        self.make_save_dir()
         self.plot_group_ranges()
         self.set_phrase_bounds()
         self.plot_group_phrase_bounds()
-        self.get_full_range()
+        self.set_full_range()
+        # number of phrases
+        self.nop = len(self.phrase_bounds)
+        self.make_registration()
+        self.make_phrases()
+
+    def make_registration(self):
+        # for each phrase, assess register width and register center at midpoint
+        rws = []
+        rcs = []
+        for pb in self.phrase_bounds:
+            # start time
+            st = pb[0] + self.start_time
+            # midpoint
+            mp = st + pb[1]/2
+            # in context of section duration
+            mp_x = (mp - self.start_time) / self.duration
+            # register width
+            rw = lin_interp(mp_x, self.reg_width[0], self.reg_width[1])
+            # register center
+            rc = lin_interp(mp_x, self.reg_center[0], self.reg_center[1])
+            rws.append(rw)
+            rcs.append(rc)
+        self.phrase_rws = rws
+        self.phrase_rcs = rcs
+
+    # using linear interp for this ... haven't really thought about if it
+    # would be better to be log scale? Should think about it at some point...
+
+    def make_phrases(self):
+        phrases = []
+        ins = self.instruments
+        fr = self.full_range
+        for i in range(self.nop):
+            st = self.phrase_bounds[i][0]
+            dur = self.phrase_bounds[i][1]
+            rw = self.phrase_rws[i]
+            rc = self.phrase_rcs[i]
+            phrase = Phrase(ins, st, dur, fr, rw, rc)
+            phrases.append(phrase)
+        self.phrases = phrases
 
     # assess the full range, from instrumetns in group
-    def get_full_range(self):
+    def set_full_range(self):
         rmin = min([inst.mp_min for inst in self.instruments])
         rmax = max([inst.mp_max for inst in self.instruments])
         self.full_range = range(rmin, rmax)
@@ -135,8 +203,12 @@ class Group:
         plt.savefig(f"saves/figures/sections/section_{self.section_num}/group_{self.group_num}/phrase_bounds.png")
         plt.close()
 
+    def make_save_dir(self):
+        os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
+
 class Section:
     """'Object which sets groupings / parameter settings for section'"""
+
     def __init__(
         self, chord, instruments, partition, global_chord_weights, section_num, \
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density, \
@@ -175,7 +247,8 @@ class Section:
         for group in self.groups:
             pb = np.array(group.phrase_bounds)
             pb[:, 0] = pb[:, 0] + self.start_time
-            ax.broken_barh(pb, (sum(group.section_partition[:group.group_num - 1]), len(group.instruments)), color=(group.instruments[0].color))
+            ax.broken_barh(pb, (sum(self.partition[:group.group_num - 1]), \
+                len(group.instruments)), color=(group.instruments[0].color))
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.yticks([], [])
         xlocs, xlabels = plt.xticks()
@@ -272,6 +345,7 @@ class Section:
 
 class Piece:
     """'Object which generates all sections, delegates top level params, etc'"""
+
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
         rhythmic_nCVI_max, td_min, td_octaves, dyns, rr_max, rdur_nCVI_max, \
