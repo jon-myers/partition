@@ -14,7 +14,7 @@ insts = [tr1, tr2, hn, trb, btrb]
 # number of sections
 nos = 5 + np.random.choice(np.arange(5))
 # root structure nCVI - or root structure "wobble"
-rsw = np.random.uniform(5, 15)
+rsw = np.random.uniform(5, 20)
 # event level rhythmic wobble
 ewob_max = 15
 # minimum temporal density
@@ -34,7 +34,6 @@ rsm = 20
 rtd_min = 8
 # minimum rest ratio
 rr_min = 0.25
-
 
 piece = Piece(dur_tot, chord, insts, nos, rsw, ewob_max, td_min, td_oct, dyns,\
                 rr_max, rdm, rsm, rtd_min, rr_min)

@@ -10,6 +10,8 @@ piece = pickle.load(open('saves/pickles/piece.p', 'rb'))
 
 for section in piece.sections:
     for group in section.groups:
-        print(group.reg_width)
+        for phrase in group.phrases:
+            print(phrase.register)
+            print('')
         print('')
     print('')

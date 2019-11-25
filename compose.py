@@ -32,13 +32,19 @@ class Instrument:
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
 
-    def __init__(self, instruments, start_time, duration, full_reg, reg_width, reg_center):
+    def __init__(
+        self, instruments, section_start_time, phrase_start_time, duration, \
+        full_reg, reg_width, reg_center, full_piece_range
+        ):
+        self.full_piece_range = full_piece_range
         self.instruments = instruments
-        self.start_time = start_time
+        self.section_start_time = section_start_time
+        self.phrase_start_time = phrase_start_time
         self.duration = duration
         self.full_reg = full_reg
         self.reg_width = reg_width
         self.reg_center = reg_center
+        self.midpoint = self.phrase_start_time + (self.duration / 2)
         self.set_register()
 
     def set_register(self):
@@ -62,7 +68,10 @@ class Group:
     def __init__(
         self, instruments, pitch_set, weights, group_num, rest_ratio, \
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num, \
-        start_time, duration, section_partition, reg_width, reg_center):
+        start_time, duration, section_partition, reg_width, reg_center, \
+        full_piece_range
+        ):
+        self.full_piece_range = full_piece_range
         self.reg_width = reg_width
         self.reg_center = reg_center
         self.section_partition = section_partition
@@ -82,11 +91,42 @@ class Group:
         self.plot_group_ranges()
         self.set_phrase_bounds()
         self.plot_group_phrase_bounds()
-        self.set_full_range()
+        self.set_full_group_range()
         # number of phrases
         self.nop = len(self.phrase_bounds)
         self.make_registration()
         self.make_phrases()
+        self.plot_group_regs()
+
+    def plot_group_regs(self):
+        fig = plt.figure(figsize=[8, 4])
+        ax = fig.add_subplot(111)
+        mins = [min(phrase.register) for phrase in self.phrases]
+        maxs = [max(phrase.register) for phrase in self.phrases]
+        mps = [phrase.midpoint for phrase in self.phrases]
+        for inst in self.instruments:
+            ax.fill_between(mps, mins, maxs, color = inst.color, alpha = 1 / len(self.instruments))
+        plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
+        # plt.xlim(self.start_time, self.start_time + self.duration)
+        # plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/group_{str(self.group_num)}/range_envelope.png')
+        plt.close()
+
+
+    #
+    # def plot_range(self):
+    #     fig = plt.figure(figsize=[6, 1.5])
+    #     plt.plot((self.range), [1 for i in self.range], marker='|', color=(self.color))
+    #     plt.xlim(24, 84)
+    #     plt.ylim(0, 2)
+    #     plt.xticks([12 * (2 + j) for j in range(6)], ['C' + str(j + 2) for j in range(6)])
+    #     plt.yticks([])
+    #     plt.title(self.name)
+    #     plt.annotate((self.min), (self.mp_min, 1.25), ha='center')
+    #     plt.annotate((self.max), (self.mp_max, 1.25), ha='center')
+    #     plt.tight_layout()
+    #     plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
+
 
     def make_registration(self):
         # for each phrase, assess register width and register center at midpoint
@@ -114,21 +154,23 @@ class Group:
     def make_phrases(self):
         phrases = []
         ins = self.instruments
-        fr = self.full_range
+        fgr = self.full_group_range
+        fpr = self.full_piece_range
+        sst = self.start_time
         for i in range(self.nop):
-            st = self.phrase_bounds[i][0]
+            pst = self.phrase_bounds[i][0] + sst
             dur = self.phrase_bounds[i][1]
             rw = self.phrase_rws[i]
             rc = self.phrase_rcs[i]
-            phrase = Phrase(ins, st, dur, fr, rw, rc)
+            phrase = Phrase(ins, sst, pst, dur, fgr, rw, rc, fpr)
             phrases.append(phrase)
         self.phrases = phrases
 
     # assess the full range, from instrumetns in group
-    def set_full_range(self):
+    def set_full_group_range(self):
         rmin = min([inst.mp_min for inst in self.instruments])
         rmax = max([inst.mp_max for inst in self.instruments])
-        self.full_range = range(rmin, rmax)
+        self.full_group_range = range(rmin, rmax)
 
     def print_rest_params(self, file_):
         print(('\n\nGroup Number: ' + str(round(self.group_num, 3))), file=file_)
@@ -136,11 +178,6 @@ class Group:
         print(('Rest Duration nCVI: ' + str(round(self.rest_dur_nCVI, 3))), file=file_)
         print(('Rest Spread nCVI: ' + str(round(self.rest_spread_nCVI, 3))), file=file_)
         print(('Rest Temporal Density: ' + str(round(self.rtemp_density, 3))), file=file_)
-
-    def full_range(self):
-        rmin = min([inst.mp_min for inst in self.instruments])
-        rmax = max([inst.mp_max for inst in self.instruments])
-        return range(rmin, rmax)
 
     def plot_group_ranges(self):
         fig = plt.figure(figsize=[8, 1.0 + 0.5 * len(self.instruments)])
@@ -212,8 +249,9 @@ class Section:
     def __init__(
         self, chord, instruments, partition, global_chord_weights, section_num, \
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density, \
-        nos, start_time, reg_widths, reg_centers
+        nos, start_time, reg_widths, reg_centers, full_piece_range
         ):
+        self.full_piece_range = full_piece_range
         self.reg_widths = reg_widths
         self.reg_centers = reg_centers
         self.nos = nos
@@ -223,6 +261,8 @@ class Section:
         self.rsn = rest_spread_nCVI
         self.rtd = rtemp_density
         self.partition = partition
+        # number of groups
+        self.nog = len(self.partition)
         self.start_time = start_time
         self.section_num = section_num
         self.chord = chord
@@ -236,7 +276,50 @@ class Section:
         os.mkdir('saves/figures/sections/section_' + str(section_num))
         self.instantiate_groups()
         self.plot_section_phrase_bounds()
+        self.plot_section_regs()
+        self.plot_section_phrase_ranges()
         self.progress()
+
+    def plot_section_regs(self):
+        fig = plt.figure(figsize=[8, 4])
+        ax = fig.add_subplot(111)
+        for group in self.groups:
+            mins = [min(phrase.register) for phrase in group.phrases]
+            maxs = [max(phrase.register) for phrase in group.phrases]
+            mps = [phrase.midpoint for phrase in group.phrases]
+            for inst in group.instruments:
+                ax.fill_between(mps, mins, maxs, color = inst.color, alpha = (1 / len(group.instruments)))
+        plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/range_envelope.png')
+        plt.close()
+
+    def plot_section_phrase_ranges(self):
+        fig = plt.figure(figsize = [10, 4])
+        ax = fig.add_subplot(111)
+        for group in self.groups:
+            mins = [min(phrase.register) for phrase in group.phrases]
+            extents = [max(phrase.register) - min(phrase.register) for phrase in group.phrases]
+            combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+            pb = np.array(group.phrase_bounds)
+            pb[:, 0] = pb[:, 0] + self.start_time
+            for p_index in range(group.nop):
+                for inst in group.instruments:
+                    ax.broken_barh([pb[p_index]], combs[p_index], \
+                    color=(inst.color), alpha = (2/3) / len(group.instruments))
+        plt.ylim(24, 72)
+        plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        xlocs, xlabels = plt.xticks()
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/phrase_ranges.png')
+        plt.savefig(f'saves/figures/ranges/phrase_range_{str(self.section_num)}.png')
+        plt.close()
+
+
 
     def progress(self):
         printProgressBar((self.section_num), (self.nos), prefix='Progress:', suffix='Complete', length=50)
@@ -247,8 +330,10 @@ class Section:
         for group in self.groups:
             pb = np.array(group.phrase_bounds)
             pb[:, 0] = pb[:, 0] + self.start_time
-            ax.broken_barh(pb, (sum(self.partition[:group.group_num - 1]), \
-                len(group.instruments)), color=(group.instruments[0].color))
+            for inst in group.instruments:
+                ax.broken_barh(pb, (sum(self.partition[:group.group_num - 1]), \
+                    len(group.instruments)), color=(inst.color), \
+                    alpha = 1 / len(group.instruments))
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.yticks([], [])
         xlocs, xlabels = plt.xticks()
@@ -265,6 +350,7 @@ class Section:
         st = self.start_time
         dur = self.duration
         p = self.partition
+        fpr = self.full_piece_range
         for i in range(len(self.grouping)):
             gp = self.grouping[i]
             ps = self.pitch_sets[i]
@@ -275,7 +361,7 @@ class Section:
             rts = self.rtd_spread[i]
             rw = self.reg_widths[i]
             rc = self.reg_centers[i]
-            g = Group(gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw, rc)
+            g = Group(gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw, rc, fpr)
             groups.append(g)
         self.groups = groups
 
@@ -370,10 +456,42 @@ class Piece:
         self.init_dirs()
         self.init_progressBar()
         self.range_delegation()
+        self.set_full_piece_range()
         self.make_sections()
         self.print_rest_params()
         self.print_pitch_params()
         self.plot_piece_phrase_bounds()
+        self.plot_section_phrase_ranges()
+
+    def plot_section_phrase_ranges(self):
+        fig = plt.figure(figsize = [14, 4])
+        ax = fig.add_subplot(111)
+        for section in self.sections:
+            for group in section.groups:
+                mins = [min(phrase.register) for phrase in group.phrases]
+                extents = [max(phrase.register) - min(phrase.register) for phrase in group.phrases]
+                combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+                pb = np.array(group.phrase_bounds)
+                pb[:, 0] = pb[:, 0] + section.start_time
+                for p_index in range(group.nop):
+                    for inst in group.instruments:
+                        ax.broken_barh([pb[p_index]], combs[p_index], \
+                        color=(inst.color), alpha = (2/3) / len(group.instruments))
+        plt.ylim(24, 72)
+        plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
+        plt.xlim(0, self.dur_tot)
+        xlocs, xlabels = plt.xticks()
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(0, self.dur_tot)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/ranges/phrase_ranges.png')
+        plt.close()
+
+    def set_full_piece_range(self):
+        min_ = min([inst.mp_min for inst in self.instruments])
+        max_ = max([inst.mp_max for inst in self.instruments])
+        self.full_piece_range = range(min_, max_)
+
 
     def init_progressBar(self):
         nos = self.nos
@@ -386,6 +504,7 @@ class Piece:
         gcw = self.global_chord_weights
         nos = self.nos
         sd = self.section_durs
+        fpr = self.full_piece_range
         start_times = [sum(sd[:i]) for i in range(nos)]
         for i in range(nos):
             p = self.partitions[i]
@@ -397,7 +516,7 @@ class Piece:
             st = start_times[i]
             rw = self.reg_widths[i]
             rc = self.reg_centers[i]
-            sec = Section(c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, rc)
+            sec = Section(c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, rc, fpr)
             sections.append(sec)
         self.sections = sections
 
@@ -410,6 +529,10 @@ class Piece:
         if os.path.exists(path2):
             shutil.rmtree(path2)
         os.mkdir(path2)
+        path3 = 'saves/figures/ranges'
+        if os.path.exists(path3):
+            shutil.rmtree(path3)
+        os.mkdir(path3)
 
     def set_partitions(self):
         self.partitions = dc_alg(list(get_partition(len(self.instruments))), self.nos)
@@ -498,8 +621,8 @@ class Piece:
             for group in section.groups:
                 print(f"Group {str(group.group_num)}: ", file=file)
                 print(f"pitch set: {', '.join([str(i) for i in group.pitch_set])}", file=file)
-                rmin = midi_pitch_to_note_name(min(group.full_range))
-                rmax = midi_pitch_to_note_name(max(group.full_range))
+                rmin = midi_pitch_to_note_name(min(group.full_group_range))
+                rmax = midi_pitch_to_note_name(max(group.full_group_range))
                 print(f"full range: {str(rmin)} - {str(rmax)}", file=file)
                 print('', file=file)
             print('', file=file)
