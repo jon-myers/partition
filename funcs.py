@@ -1,12 +1,7 @@
-# uncompyle6 version 3.5.1
-# Python bytecode 3.7 (3394)
-# Decompiled from: Python 3.7.5 (default, Oct 25 2019, 10:52:18)
-# [Clang 4.0.1 (tags/RELEASE_401/final)]
-# Embedded file name: /Users/Jon/Documents/2019/brass_quintet/funcs.py
-# Size of source mod 2**32: 9193 bytes
 import numpy as np, pretty_midi, itertools
 from matplotlib import pyplot as plt
 from scipy.stats import skewnorm
+from inspect import signature
 
 def dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0):
     selections = []
@@ -272,4 +267,23 @@ def generalized_delegator(locale, get_function, parameter, midpoints, rr_min=0):
     else:
         out = [get_function(parameter) for mp in midpoints]
     return out
-# okay decompiling __pycache__/funcs.cpython-37.pyc
+
+from inspect import signature
+
+
+def auto_args(target):
+    """
+    A decorator for automatically copying constructor arguments to `self`.
+    """
+    # Get a signature object for the target method:
+    sig = signature(target)
+    def replacement(self, *args, **kwargs):
+        # Parse the provided arguments using the target's signature:
+        bound_args = sig.bind(self, *args, **kwargs)
+        # Save away the arguments on `self`:
+        for k, v in bound_args.arguments.items():
+            if k != 'self':
+                setattr(self, k, v)
+        # Call the actual constructor for anything else:
+        target(self, *args, **kwargs)
+    return replacement

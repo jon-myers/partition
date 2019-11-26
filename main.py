@@ -1,12 +1,19 @@
 from compose import *
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from inspect import signature
 
-tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, 'gold')
-tr2 = Instrument('Trumpet 2', 'A3', 'A5', 2, 'forestgreen')
-hn = Instrument('Horn', 'C3', 'C5', 3, 'tomato')
-trb = Instrument('Trombone', 'G2', 'G4', 4, 'dodgerblue',)
-btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, 'mediumorchid')
+c_dict = mcolors.CSS4_COLORS
+keys = list(c_dict.keys())
+c_indexes = np.random.choice(keys, size = 5, replace = False)
+# print(c_dict[c_indexes[0]])
+tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, c_dict[c_indexes[0]])
+tr2 = Instrument('Trumpet 2', 'A3', 'A5', 2, c_dict[c_indexes[1]])
+hn = Instrument('Horn', 'C3', 'C5', 3, c_dict[c_indexes[2]])
+trb = Instrument('Trombone', 'G2', 'G4', 4, c_dict[c_indexes[3]])
+btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, c_dict[c_indexes[4]])
 
 dur_tot = 14 * 60
 chord = [0, 2, 3, 7, 8, 10]

@@ -1,8 +1,10 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from funcs import incremental_create_section_durs as icsd
+from funcs import juiced_distribution_maker
 from funcs import *
 import random, os, itertools, shutil, pickle
+import functools
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
@@ -31,19 +33,11 @@ class Instrument:
 
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
-
+    @auto_args
     def __init__(
         self, instruments, section_start_time, phrase_start_time, duration, \
         full_reg, reg_width, reg_center, full_piece_range
         ):
-        self.full_piece_range = full_piece_range
-        self.instruments = instruments
-        self.section_start_time = section_start_time
-        self.phrase_start_time = phrase_start_time
-        self.duration = duration
-        self.full_reg = full_reg
-        self.reg_width = reg_width
-        self.reg_center = reg_center
         self.midpoint = self.phrase_start_time + (self.duration / 2)
         self.set_register()
 
@@ -51,7 +45,7 @@ class Phrase:
         rmin = min(self.full_reg)
         rmax = max(self.full_reg)
         max_extent = rmax - rmin
-        min_extent = 12
+        min_extent = 6
         self.extent = int(round(lin_interp(self.reg_width, min_extent, max_extent)))
         min_center = rmin + (self.extent/2)
         max_center = rmax - (self.extent/2)
@@ -60,33 +54,21 @@ class Phrase:
 
 
 
-
+        # tm = self.td_min
+        # to = self.td_octaves
+        # tw = self.td_widths
+        # tc = self.td_centers
 
 class Group:
     """Contains parametric info and generative methods for a given group"""
-
+    @auto_args
     def __init__(
         self, instruments, pitch_set, weights, group_num, rest_ratio, \
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num, \
         start_time, duration, section_partition, reg_width, reg_center, \
-        full_piece_range
+        full_piece_range, td_min, td_octaves, td_widths, td_centers
         ):
-        self.full_piece_range = full_piece_range
-        self.reg_width = reg_width
-        self.reg_center = reg_center
-        self.section_partition = section_partition
-        self.duration = duration
-        self.start_time = start_time
-        self.instruments = instruments
-        self.pitch_set = pitch_set
-        self.weights = weights
-        self.group_num = group_num
-        self.rest_ratio = rest_ratio
-        self.rest_dur_nCVI = rest_dur_nCVI
-        self.rest_spread_nCVI = rest_spread_nCVI
-        self.rtemp_density = rtemp_density
         self.stitch = 0
-        self.section_num = section_num
         self.make_save_dir()
         self.plot_group_ranges()
         self.set_phrase_bounds()
@@ -98,35 +80,8 @@ class Group:
         self.make_phrases()
         self.plot_group_regs()
 
-    def plot_group_regs(self):
-        fig = plt.figure(figsize=[8, 4])
-        ax = fig.add_subplot(111)
-        mins = [min(phrase.register) for phrase in self.phrases]
-        maxs = [max(phrase.register) for phrase in self.phrases]
-        mps = [phrase.midpoint for phrase in self.phrases]
-        for inst in self.instruments:
-            ax.fill_between(mps, mins, maxs, color = inst.color, alpha = 1 / len(self.instruments))
-        plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
-        # plt.xlim(self.start_time, self.start_time + self.duration)
-        # plt.tight_layout()
-        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/group_{str(self.group_num)}/range_envelope.png')
-        plt.close()
-
-
-    #
-    # def plot_range(self):
-    #     fig = plt.figure(figsize=[6, 1.5])
-    #     plt.plot((self.range), [1 for i in self.range], marker='|', color=(self.color))
-    #     plt.xlim(24, 84)
-    #     plt.ylim(0, 2)
-    #     plt.xticks([12 * (2 + j) for j in range(6)], ['C' + str(j + 2) for j in range(6)])
-    #     plt.yticks([])
-    #     plt.title(self.name)
-    #     plt.annotate((self.min), (self.mp_min, 1.25), ha='center')
-    #     plt.annotate((self.max), (self.mp_max, 1.25), ha='center')
-    #     plt.tight_layout()
-    #     plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
-
+    def make_save_dir(self):
+        os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
 
     def make_registration(self):
         # for each phrase, assess register width and register center at midpoint
@@ -179,25 +134,6 @@ class Group:
         print(('Rest Spread nCVI: ' + str(round(self.rest_spread_nCVI, 3))), file=file_)
         print(('Rest Temporal Density: ' + str(round(self.rtemp_density, 3))), file=file_)
 
-    def plot_group_ranges(self):
-        fig = plt.figure(figsize=[8, 1.0 + 0.5 * len(self.instruments)])
-        ax = fig.add_subplot(111)
-        for i, inst in enumerate(self.instruments[::-1]):
-            plt.plot((inst.range), [i + 0.5 for x in inst.range], marker='|', color=(inst.color),
-              label=(inst.name))
-            plt.annotate((inst.min), (inst.mp_min, 0.75 + i), ha='center')
-            plt.annotate((inst.max), (inst.mp_max, 0.75 + i), ha='center')
-        plt.xlim(24, 84)
-        plt.ylim(0, len(self.instruments) + 1)
-        plt.xticks([12 * (2 + j) for j in range(7)], ['C' + str(j + 2) for j in range(7)])
-        plt.yticks([])
-        plt.title('Section ' + str(self.section_num) + ' Group ' + str(self.group_num))
-        handles, labels = ax.get_legend_handles_labels()
-        plt.legend(handles[::-1], labels[::-1])
-        plt.tight_layout()
-        plt.savefig(f"saves/figures/sections/section_{self.section_num}/group_{self.group_num}/ranges.png")
-        plt.close()
-
     def set_phrase_bounds(self):
         num_of_rests = int(round(self.duration / self.rtemp_density))
         if self.stitch == 0:
@@ -240,39 +176,56 @@ class Group:
         plt.savefig(f"saves/figures/sections/section_{self.section_num}/group_{self.group_num}/phrase_bounds.png")
         plt.close()
 
-    def make_save_dir(self):
-        os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
+    def plot_group_ranges(self):
+        fig = plt.figure(figsize=[8, 1.0 + 0.5 * len(self.instruments)])
+        ax = fig.add_subplot(111)
+        for i, inst in enumerate(self.instruments[::-1]):
+            plt.plot((inst.range), [i + 0.5 for x in inst.range], marker='|', color=(inst.color),
+              label=(inst.name))
+            plt.annotate((inst.min), (inst.mp_min, 0.75 + i), ha='center')
+            plt.annotate((inst.max), (inst.mp_max, 0.75 + i), ha='center')
+        plt.xlim(24, 84)
+        plt.ylim(0, len(self.instruments) + 1)
+        plt.xticks([12 * (2 + j) for j in range(7)], ['C' + str(j + 2) for j in range(7)])
+        plt.yticks([])
+        plt.title('Section ' + str(self.section_num) + ' Group ' + str(self.group_num))
+        handles, labels = ax.get_legend_handles_labels()
+        plt.legend(handles[::-1], labels[::-1])
+        plt.tight_layout()
+        plt.savefig(f"saves/figures/sections/section_{self.section_num}/group_{self.group_num}/ranges.png")
+        plt.close()
+
+    def plot_group_regs(self):
+        fig = plt.figure(figsize=[8, 4])
+        ax = fig.add_subplot(111)
+        mins = [min(phrase.register) for phrase in self.phrases]
+        maxs = [max(phrase.register) for phrase in self.phrases]
+        mps = [phrase.midpoint for phrase in self.phrases]
+        for inst in self.instruments:
+            ax.fill_between(mps, mins, maxs, color = inst.color, alpha = 1 / len(self.instruments))
+        plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
+        # plt.xlim(self.start_time, self.start_time + self.duration)
+        # plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/group_{str(self.group_num)}/range_envelope.png')
+        plt.close()
 
 class Section:
     """'Object which sets groupings / parameter settings for section'"""
-
+    @auto_args
     def __init__(
         self, chord, instruments, partition, global_chord_weights, section_num, \
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density, \
-        nos, start_time, reg_widths, reg_centers, full_piece_range
+        nos, start_time, reg_widths, reg_centers, full_piece_range, td_min, \
+        td_octaves, td_widths, td_centers
         ):
-        self.full_piece_range = full_piece_range
-        self.reg_widths = reg_widths
-        self.reg_centers = reg_centers
-        self.nos = nos
-        self.instruments = instruments
-        self.rr = rest_ratio
-        self.rdn = rest_dur_nCVI
-        self.rsn = rest_spread_nCVI
-        self.rtd = rtemp_density
-        self.partition = partition
         # number of groups
         self.nog = len(self.partition)
-        self.start_time = start_time
-        self.section_num = section_num
-        self.chord = chord
-        self.global_chord_weights = global_chord_weights
         self.get_section_chord()
         self.get_weights()
         self.get_pitch_sets()
-        self.duration = duration
         self.make_groups()
         self.set_rparam_spread_for_groups()
+        # self.set_td_delegation()
         os.mkdir('saves/figures/sections/section_' + str(section_num))
         self.instantiate_groups()
         self.plot_section_phrase_bounds()
@@ -319,8 +272,6 @@ class Section:
         plt.savefig(f'saves/figures/ranges/phrase_range_{str(self.section_num)}.png')
         plt.close()
 
-
-
     def progress(self):
         printProgressBar((self.section_num), (self.nos), prefix='Progress:', suffix='Complete', length=50)
 
@@ -351,7 +302,11 @@ class Section:
         dur = self.duration
         p = self.partition
         fpr = self.full_piece_range
-        for i in range(len(self.grouping)):
+        tm = self.td_min
+        to = self.td_octaves
+        tw = self.td_widths
+        tc = self.td_centers
+        for i in range(self.nog):
             gp = self.grouping[i]
             ps = self.pitch_sets[i]
             psi = self.ps_indexes[i]
@@ -361,7 +316,9 @@ class Section:
             rts = self.rtd_spread[i]
             rw = self.reg_widths[i]
             rc = self.reg_centers[i]
-            g = Group(gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw, rc, fpr)
+            g = Group(
+                gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw, \
+                rc, fpr, tm, to, tw, tc)
             groups.append(g)
         self.groups = groups
 
@@ -390,7 +347,7 @@ class Section:
     def set_rparam_spread_for_groups(self, max_ratio=1.5):
         rp_partition = self.get_rparam_partitions()
         spread_ = []
-        params = [self.rr, self.rdn, self.rsn, self.rtd]
+        params = [self.rest_ratio, self.rest_dur_nCVI, self.rest_spread_nCVI, self.rtemp_density]
         for i, param in enumerate(params):
             s = [[spread(param, max_ratio) * param for k in range(j)] for j in rp_partition[i]]
             s = [j for j in itertools.chain.from_iterable(s)]
@@ -431,22 +388,11 @@ class Section:
 
 class Piece:
     """'Object which generates all sections, delegates top level params, etc'"""
-
+    @auto_args
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
         rhythmic_nCVI_max, td_min, td_octaves, dyns, rr_max, rdur_nCVI_max, \
         rspread_nCVI_max, rtemp_density_min, rr_min):
-        self.chord = chord
-        self.instruments = instruments
-        self.nos = nos
-        self.chord = chord
-        self.rr_min = rr_min
-        self.dur_tot = dur_tot
-        self.rr_max = rr_max
-        self.rdur_nCVI_max = rdur_nCVI_max
-        self.rspread_nCVI_max = rspread_nCVI_max
-        self.rtemp_density_min = rtemp_density_min
-        self.rr_min = rr_min
         self.set_weights()
         self.section_durs = icsd(nos, section_dur_nCVI) * self.dur_tot
         self.set_midpoints()
@@ -455,7 +401,10 @@ class Piece:
         self.rest_delegation()
         self.init_dirs()
         self.init_progressBar()
-        self.range_delegation()
+        # self.range_delegation()
+        # self.delegation(self.reg_widths, self.reg_centers)
+        self.reg_widths, self.reg_centers = self.delegation()
+        self.td_widths, self.td_centers = self.delegation()
         self.set_full_piece_range()
         self.make_sections()
         self.print_rest_params()
@@ -464,7 +413,7 @@ class Piece:
         self.plot_section_phrase_ranges()
 
     def plot_section_phrase_ranges(self):
-        fig = plt.figure(figsize = [14, 4])
+        fig = plt.figure(figsize = [144/11, 90/22], dpi = 220)
         ax = fig.add_subplot(111)
         for section in self.sections:
             for group in section.groups:
@@ -492,7 +441,6 @@ class Piece:
         max_ = max([inst.mp_max for inst in self.instruments])
         self.full_piece_range = range(min_, max_)
 
-
     def init_progressBar(self):
         nos = self.nos
         printProgressBar(0, nos, prefix='Progress:', suffix='Complete', length=50)
@@ -506,6 +454,8 @@ class Piece:
         sd = self.section_durs
         fpr = self.full_piece_range
         start_times = [sum(sd[:i]) for i in range(nos)]
+        tdm = self.td_min
+        tdo = self.td_octaves
         for i in range(nos):
             p = self.partitions[i]
             sdi = sd[i]
@@ -516,7 +466,11 @@ class Piece:
             st = start_times[i]
             rw = self.reg_widths[i]
             rc = self.reg_centers[i]
-            sec = Section(c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, rc, fpr)
+            tw = self.td_widths[i]
+            tc = self.td_centers[i]
+            sec = Section(
+                    c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, \
+                    rc, fpr, tdm, tdo, tw, tc)
             sections.append(sec)
         self.sections = sections
 
@@ -548,11 +502,11 @@ class Piece:
     # 2. have a trajectory over the course of the piece, 3. new with each section.
     def rest_delegation(self):
         probs = [1/3, 1/3, 1/3]
-        rr_locale, rdur_locale, rspread_locale, rtemp_density_locale = np.random.choice((np.arange(3)), p=probs, size=4)
-        rest_ratio = generalized_delegator(rr_locale, get_rest_ratio, self.rr_max, self.midpoints, self.rr_min)
-        rdur_nCVI = generalized_delegator(rdur_locale, get_rdur_nCVI, self.rdur_nCVI_max, self.midpoints)
-        rspread_nCVI = generalized_delegator(rspread_locale, get_rspread_nCVI, self.rspread_nCVI_max, self.midpoints)
-        rtemp_density = generalized_delegator(rtemp_density_locale, get_rtemp_density, self.rtemp_density_min, self.midpoints)
+        loc = functools.partial(np.random.choice, np.arange(3), p=probs)
+        rest_ratio = generalized_delegator(loc, get_rest_ratio, self.rr_max, self.midpoints, self.rr_min)
+        rdur_nCVI = generalized_delegator(loc, get_rdur_nCVI, self.rdur_nCVI_max, self.midpoints)
+        rspread_nCVI = generalized_delegator(loc, get_rspread_nCVI, self.rspread_nCVI_max, self.midpoints)
+        rtemp_density = generalized_delegator(loc, get_rtemp_density, self.rtemp_density_min, self.midpoints)
         self.rest_ratio = rest_ratio
         self.rdur_nCVI = rdur_nCVI
         self.rspread_nCVI = rspread_nCVI
@@ -566,21 +520,37 @@ class Piece:
     # trajectory over the whole piece. That is, starting fresh with every section,
     # for better or worse. (15 mins is a long time to notice a slowly morphing register shift)
     # bounded_probs: [1 - sectionwise; 2 - groupwise]
-    def range_delegation(self):
+
+    # # This worked fine, but got rid of so I could do exact thing for other p
+    # # parameters, such as td
+    # def range_delegation(self):
+    #     # probabilities deciding if groups within section are tied together or not
+    #     bounded_probs = [1/3, 2/3]
+    #     # probabilities for if there is a trajectory or not over the course of a section
+    #     # [1 - no trajectory, 2 - yes trajectory]
+    #     traj_probs = [1/3, 2/3]
+    #     #register width locale
+    #     #register center locale
+    #     reg_wit_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
+    #     reg_c_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
+    #     self.reg_widths = self.gen_del(reg_wit_loc, traj_probs)
+    #     self.reg_centers = self.gen_del(reg_c_loc, traj_probs)
+
+    def delegation(self):
         # probabilities deciding if groups within section are tied together or not
         bounded_probs = [1/3, 2/3]
         # probabilities for if there is a trajectory or not over the course of a section
         # [1 - no trajectory, 2 - yes trajectory]
         traj_probs = [1/3, 2/3]
-        #register width locale
-        #register center locale
-        reg_wit_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
-        reg_c_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
-        self.reg_widths = self.gen_range_del(reg_wit_loc, traj_probs)
-        self.reg_centers = self.gen_range_del(reg_c_loc, traj_probs)
+        wit_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
+        c_loc = np.random.choice(np.arange(2), p = bounded_probs, size = self.nos)
+        wit = self.gen_del(wit_loc, traj_probs)
+        c = self.gen_del(c_loc, traj_probs)
+        return wit, c
 
-    # generalized range delegaor; helps not repeat code in range_delegation
-    def gen_range_del(self, loc, traj_probs):
+
+    # generalized delegaor; helps not repeat code in range_delegation
+    def gen_del(self, loc, traj_probs):
         out = []
         for si in range(self.nos):
             sec_out = []
