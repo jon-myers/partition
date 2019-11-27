@@ -147,8 +147,8 @@ def incremental_create_section_durs(num_of_thoughts,nCVI_average,factor=2.0):
     section_durs /= np.sum(section_durs)
     return section_durs
 
-
-def midi_pitch_to_note_name(midi_pitch, pcs=0):
+# midi pitch to note name
+def mp_to_nn(midi_pitch, pcs=0):
     note = pc_to_note(midi_pitch % 12)
     octave = midi_pitch // 12 - 1
     if pcs == 1:
@@ -156,8 +156,8 @@ def midi_pitch_to_note_name(midi_pitch, pcs=0):
     else:
         return str(note) + str(octave)
 
-
-def note_name_to_midi_pitch(note_name):
+# note name to midi pitch
+def nn_to_mp(note_name):
     notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     return 12 * int(note_name[(-1)]) + notes.index(note_name[:-1])
 
@@ -167,7 +167,7 @@ def lin_interp(x, start, end):
     return start + x * dist
 
 
-def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd='\r'):
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd='\r'):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -229,8 +229,8 @@ def secs_to_mins(secs):
         secs = '0' + secs
     return mins + ':' + secs
 
-
-def get_rest_ratio(rr_min, rr_max):
+# get rest ratio
+def get_rr(rr_min, rr_max):
     out = np.random.uniform(rr_min, rr_max)
     return out
 
@@ -249,27 +249,24 @@ def get_rtemp_density(rtemp_density_min=5, octaves=3):
 
 def generalized_delegator(locale, get_function, parameter, midpoints, rr_min=0):
     if locale == 0:
-        if get_function == get_rest_ratio:
+        if get_function == get_rr:
             out = get_function(rr_min, parameter)
         else:
             out = get_function(parameter)
         out = [out for mp in midpoints]
     elif locale == 1:
-        if get_function == get_rest_ratio:
+        if get_function == get_rr:
             start = get_function(rr_min, parameter)
             end = get_function(rr_min, parameter)
         else:
             start = get_function(parameter)
             end = get_function(parameter)
         out = [lin_interp(mp, start, end) for mp in midpoints]
-    elif get_function == get_rest_ratio:
+    elif get_function == get_rr:
         out = [get_function(rr_min, parameter) for mp in midpoints]
     else:
         out = [get_function(parameter) for mp in midpoints]
     return out
-
-from inspect import signature
-
 
 def auto_args(target):
     """
@@ -287,3 +284,6 @@ def auto_args(target):
         # Call the actual constructor for anything else:
         target(self, *args, **kwargs)
     return replacement
+
+# the golden ratio; You never know when you'll need it!
+golden = (1 + 5**0.5) / 2

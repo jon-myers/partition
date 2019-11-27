@@ -1,23 +1,21 @@
+import random, os, itertools, shutil, functools
 import numpy as np
 from matplotlib import pyplot as plt
 from funcs import incremental_create_section_durs as icsd
-from funcs import juiced_distribution_maker
-from funcs import *
-import random, os, itertools, shutil, pickle
-import functools
+from funcs import juiced_distribution_maker, auto_args, nn_to_mp, dc_alg, \
+    get_partition, generalized_delegator, get_rr, get_rdur_nCVI, get_rspread_nCVI, \
+    get_rtemp_density, print_progress_bar, spread, secs_to_mins, lin_interp, \
+    mp_to_nn, golden
+from math import log2
+# from funcs import *
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
-
-    def __init__(self, instrumentName, min, max, instnum, color):
-        self.name = instrumentName
-        self.min = min
-        self.max = max
-        self.mp_min = note_name_to_midi_pitch(self.min)
-        self.mp_max = note_name_to_midi_pitch(self.max) + 1
+    @auto_args
+    def __init__(self, name, min, max, instnum, color, td_mult):
+        self.mp_min = nn_to_mp(self.min)
+        self.mp_max = nn_to_mp(self.max) + 1
         self.range = np.arange(self.mp_min, self.mp_max)
-        self.color = color
-
     def plot_range(self):
         fig = plt.figure(figsize=[6, 1.5])
         plt.plot((self.range), [1 for i in self.range], marker='|', color=(self.color))
@@ -36,28 +34,39 @@ class Phrase:
     @auto_args
     def __init__(
         self, instruments, section_start_time, phrase_start_time, duration, \
-        full_reg, reg_width, reg_center, full_piece_range
+        full_reg, reg_width, reg_center, full_piece_range, td_frame_top, \
+        td_octaves, td_width, td_center
         ):
         self.midpoint = self.phrase_start_time + (self.duration / 2)
         self.set_register()
+        self.set_td()
 
     def set_register(self):
         rmin = min(self.full_reg)
         rmax = max(self.full_reg)
         max_extent = rmax - rmin
         min_extent = 6
-        self.extent = int(round(lin_interp(self.reg_width, min_extent, max_extent)))
-        min_center = rmin + (self.extent/2)
-        max_center = rmax - (self.extent/2)
-        self.center = int(round(lin_interp(self.reg_center, min_center, max_center)))
-        self.register = range(int(self.center - (self.extent/2)), int(self.center + (self.extent/2)))
+        extent = int(round(lin_interp(self.reg_width, min_extent, max_extent)))
+        min_center = rmin + (extent/2)
+        max_center = rmax - (extent/2)
+        center = int(round(lin_interp(self.reg_center, min_center, max_center)))
+        self.register = range(int(center - (extent/2)), int(center + (extent/2)))
 
-
-
-        # tm = self.td_min
-        # to = self.td_octaves
-        # tw = self.td_widths
-        # tc = self.td_centers
+    def set_td(self):
+        """Sets the temporal density """
+        td_max = np.log2(self.td_frame_top)
+        # print(td_max)
+        td_min = td_max - self.td_octaves
+        max_extent = td_max - td_min
+        extent = lin_interp(self.td_width, 0.125, max_extent)
+        min_center = td_min + (extent/2)
+        max_center = td_max - (extent/2)
+        center = lin_interp(self.td_center, min_center, max_center)
+        log_td_bounds = [center - extent/2, center + extent/2]
+        # make this log? currently, won't this trend up?
+        log_td = np.random.uniform(log_td_bounds[0], log_td_bounds[1])
+        self.td_bounds = 2 ** (np.array(log_td_bounds))
+        self.td = 2 ** (log_td)
 
 class Group:
     """Contains parametric info and generative methods for a given group"""
@@ -66,7 +75,7 @@ class Group:
         self, instruments, pitch_set, weights, group_num, rest_ratio, \
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num, \
         start_time, duration, section_partition, reg_width, reg_center, \
-        full_piece_range, td_min, td_octaves, td_widths, td_centers
+        full_piece_range, td_max, td_octaves, td_width, td_center
         ):
         self.stitch = 0
         self.make_save_dir()
@@ -77,16 +86,25 @@ class Group:
         # number of phrases
         self.nop = len(self.phrase_bounds)
         self.make_registration()
+        self.set_td_frame()
         self.make_phrases()
         self.plot_group_regs()
+
+    def set_td_frame(self):
+        mults = np.array([inst.td_mult for inst in self.instruments])
+        avg_td_mult = 2**np.average(np.log2(mults))
+        self.td_frame_top = avg_td_mult * self.td_max
 
     def make_save_dir(self):
         os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
 
+    # should refactor this name ... its going to do registration and phrase tds
     def make_registration(self):
         # for each phrase, assess register width and register center at midpoint
         rws = []
         rcs = []
+        tdws = []
+        tdcs = []
         for pb in self.phrase_bounds:
             # start time
             st = pb[0] + self.start_time
@@ -98,13 +116,19 @@ class Group:
             rw = lin_interp(mp_x, self.reg_width[0], self.reg_width[1])
             # register center
             rc = lin_interp(mp_x, self.reg_center[0], self.reg_center[1])
+            # td width
+            tw = lin_interp(mp_x, self.td_width[0], self.td_width[1])
+            # td center
+            tc = lin_interp(mp_x, self.td_center[0], self.td_center[1])
             rws.append(rw)
             rcs.append(rc)
+            tdws.append(tw)
+            tdcs.append(tc)
         self.phrase_rws = rws
         self.phrase_rcs = rcs
+        self.phrase_tdws = tdws
+        self.phrase_tdcs = tdcs
 
-    # using linear interp for this ... haven't really thought about if it
-    # would be better to be log scale? Should think about it at some point...
 
     def make_phrases(self):
         phrases = []
@@ -112,12 +136,16 @@ class Group:
         fgr = self.full_group_range
         fpr = self.full_piece_range
         sst = self.start_time
+        tdft = self.td_frame_top
+        tdo = self.td_octaves
         for i in range(self.nop):
             pst = self.phrase_bounds[i][0] + sst
             dur = self.phrase_bounds[i][1]
             rw = self.phrase_rws[i]
             rc = self.phrase_rcs[i]
-            phrase = Phrase(ins, sst, pst, dur, fgr, rw, rc, fpr)
+            tdw = self.phrase_tdws[i]
+            tdc = self.phrase_tdcs[i]
+            phrase = Phrase(ins, sst, pst, dur, fgr, rw, rc, fpr, tdft, tdo, tdw, tdc)
             phrases.append(phrase)
         self.phrases = phrases
 
@@ -169,7 +197,7 @@ class Group:
         plt.title(f"Section {str(self.section_num)}, Group {str(self.group_num)} - {', '.join([str(i.name) for i in self.instruments])}")
         plt.yticks([], [])
         plt.xlim(self.start_time, self.start_time + self.duration)
-        xlocs, xlabels = plt.xticks()
+        xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.tight_layout()
@@ -215,7 +243,7 @@ class Section:
     def __init__(
         self, chord, instruments, partition, global_chord_weights, section_num, \
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density, \
-        nos, start_time, reg_widths, reg_centers, full_piece_range, td_min, \
+        nos, start_time, reg_widths, reg_centers, full_piece_range, td_max, \
         td_octaves, td_widths, td_centers
         ):
         # number of groups
@@ -229,24 +257,26 @@ class Section:
         os.mkdir('saves/figures/sections/section_' + str(section_num))
         self.instantiate_groups()
         self.plot_section_phrase_bounds()
-        self.plot_section_regs()
+        # self.plot_section_regs()
         self.plot_section_phrase_ranges()
+        self.plot_section_td()
+        self.plot_section_td_and_range()
         self.progress()
 
-    def plot_section_regs(self):
-        fig = plt.figure(figsize=[8, 4])
-        ax = fig.add_subplot(111)
-        for group in self.groups:
-            mins = [min(phrase.register) for phrase in group.phrases]
-            maxs = [max(phrase.register) for phrase in group.phrases]
-            mps = [phrase.midpoint for phrase in group.phrases]
-            for inst in group.instruments:
-                ax.fill_between(mps, mins, maxs, color = inst.color, alpha = (1 / len(group.instruments)))
-        plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
-        plt.xlim(self.start_time, self.start_time + self.duration)
-        plt.tight_layout()
-        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/range_envelope.png')
-        plt.close()
+    # def plot_section_regs(self):
+    #     fig = plt.figure(figsize=[8, 4])
+    #     ax = fig.add_subplot(111)
+    #     for group in self.groups:
+    #         mins = [min(phrase.register) for phrase in group.phrases]
+    #         maxs = [max(phrase.register) for phrase in group.phrases]
+    #         mps = [phrase.midpoint for phrase in group.phrases]
+    #         for inst in group.instruments:
+    #             ax.fill_between(mps, mins, maxs, color = inst.color, alpha = (1 / len(group.instruments)))
+    #     plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
+    #     plt.xlim(self.start_time, self.start_time + self.duration)
+    #     plt.tight_layout()
+    #     plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/range_envelope.png')
+    #     plt.close()
 
     def plot_section_phrase_ranges(self):
         fig = plt.figure(figsize = [10, 4])
@@ -264,7 +294,7 @@ class Section:
         plt.ylim(24, 72)
         plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
         plt.xlim(self.start_time, self.start_time + self.duration)
-        xlocs, xlabels = plt.xticks()
+        xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.tight_layout()
@@ -272,8 +302,65 @@ class Section:
         plt.savefig(f'saves/figures/ranges/phrase_range_{str(self.section_num)}.png')
         plt.close()
 
+    def plot_section_td(self):
+        fig = plt.figure(figsize = [10,4])
+        ax = fig.add_subplot(111)
+        for group in self.groups:
+            # print('prase td bounds: '+str([phrase.td_bounds for phrase in group.phrases]))
+            mins = [phrase.td_bounds[0] for phrase in group.phrases]
+            extents = [phrase.td_bounds[1] - phrase.td_bounds[0] for phrase in group.phrases]
+            combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+            # for lines
+            pb = np.array(group.phrase_bounds)
+            pb[:, 0] = pb[:, 0] + self.start_time
+            for p_index in range(group.nop):
+                for inst in group.instruments:
+                    plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].td for i in range(2)], \
+                    color=inst.color, alpha = 1, linewidth=2 )
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        xlocs = plt.xticks()[0]
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        plt.yscale('log', basey=2)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/phrase_tds.png')
+        plt.savefig(f'saves/figures/temporal_densities/td_{str(self.section_num)}.png')
+        plt.close()
+
+    def plot_section_td_and_range(self):
+        fig = plt.figure(figsize = [10,4])
+        ax = fig.add_subplot(111)
+        for group in self.groups:
+            # print('prase td bounds: '+str([phrase.td_bounds for phrase in group.phrases]))
+            mins = [phrase.td_bounds[0] for phrase in group.phrases]
+            extents = [phrase.td_bounds[1] - phrase.td_bounds[0] for phrase in group.phrases]
+            combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+            # for lines
+            pb = np.array(group.phrase_bounds)
+            pb[:, 0] = pb[:, 0] + self.start_time
+            for p_index in range(group.nop):
+                for inst in group.instruments:
+                    ax.broken_barh([pb[p_index]], combs[p_index], \
+                    color=(inst.color), alpha=(1/3) / len(group.instruments))
+                    #plot actual td
+                    plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].td for i in range(2)], \
+                    color=inst.color, alpha=1, linewidth=2 )
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        xlocs = plt.xticks()[0]
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        plt.yscale('log', basey=2)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/phrase_td_and_ranges.png')
+        plt.savefig(f'saves/figures/temporal_densities/td_{str(self.section_num)}_and_range.png')
+        plt.close()
+
+
+
     def progress(self):
-        printProgressBar((self.section_num), (self.nos), prefix='Progress:', suffix='Complete', length=50)
+        print_progress_bar((self.section_num), (self.nos), prefix='Progress:', suffix='Complete', length=50)
 
     def plot_section_phrase_bounds(self):
         fig = plt.figure(figsize=[8, 1 + 0.5 * len(self.groups)])
@@ -287,7 +374,7 @@ class Section:
                     alpha = 1 / len(group.instruments))
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.yticks([], [])
-        xlocs, xlabels = plt.xticks()
+        xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.tight_layout()
@@ -302,7 +389,7 @@ class Section:
         dur = self.duration
         p = self.partition
         fpr = self.full_piece_range
-        tm = self.td_min
+        tm = self.td_max
         to = self.td_octaves
         tw = self.td_widths
         tc = self.td_centers
@@ -316,6 +403,8 @@ class Section:
             rts = self.rtd_spread[i]
             rw = self.reg_widths[i]
             rc = self.reg_centers[i]
+            tw = self.td_widths[i]
+            tc = self.td_centers[i]
             g = Group(
                 gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw, \
                 rc, fpr, tm, to, tw, tc)
@@ -385,13 +474,12 @@ class Section:
         self.pitch_sets = pitch_sets
         self.ps_indexes = indexes
 
-
 class Piece:
     """'Object which generates all sections, delegates top level params, etc'"""
     @auto_args
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
-        rhythmic_nCVI_max, td_min, td_octaves, dyns, rr_max, rdur_nCVI_max, \
+        rhythmic_nCVI_max, td_max, td_octaves, dyns, rr_max, rdur_nCVI_max, \
         rspread_nCVI_max, rtemp_density_min, rr_min):
         self.set_weights()
         self.section_durs = icsd(nos, section_dur_nCVI) * self.dur_tot
@@ -410,9 +498,11 @@ class Piece:
         self.print_rest_params()
         self.print_pitch_params()
         self.plot_piece_phrase_bounds()
-        self.plot_section_phrase_ranges()
+        self.plot_piece_phrase_ranges()
+        self.plot_piece_td_and_range()
+        self.plot_piece_td()
 
-    def plot_section_phrase_ranges(self):
+    def plot_piece_phrase_ranges(self):
         fig = plt.figure(figsize = [144/11, 90/22], dpi = 220)
         ax = fig.add_subplot(111)
         for section in self.sections:
@@ -429,11 +519,72 @@ class Piece:
         plt.ylim(24, 72)
         plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
         plt.xlim(0, self.dur_tot)
-        xlocs, xlabels = plt.xticks()
+        xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
         plt.xlim(0, self.dur_tot)
         plt.tight_layout()
         plt.savefig(f'saves/figures/ranges/phrase_ranges.png')
+        plt.close()
+
+    def plot_piece_td_and_range(self):
+        fig = plt.figure(figsize = [144/11, 90/11], dpi = 220)
+        ax = fig.add_subplot(111)
+        for section in self.sections:
+            for group in section.groups:
+                # print('prase td bounds: '+str([phrase.td_bounds for phrase in group.phrases]))
+                mins = [phrase.td_bounds[0] for phrase in group.phrases]
+                extents = [phrase.td_bounds[1] - phrase.td_bounds[0] for phrase in group.phrases]
+                combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+                # for lines
+                pb = np.array(group.phrase_bounds)
+                pb[:, 0] = pb[:, 0] + section.start_time
+                for p_index in range(group.nop):
+                    for inst in group.instruments:
+                        ax.broken_barh([pb[p_index]], combs[p_index], \
+                        color=(inst.color), alpha = (1/3) / len(group.instruments))
+                        #plot actual td
+                        plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].td for i in range(2)], \
+                        color=inst.color, alpha = 1, linewidth=2 )
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.xlim(0, self.dur_tot)
+        xlocs = plt.xticks()[0]
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(0, self.dur_tot)
+        plt.yscale('log', basey=2)
+        ylocs = plt.yticks()[0]
+        plt.yticks(ylocs, [str(i) for i in ylocs])
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/temporal_densities/piece_td_and_range.png')
+        plt.close()
+
+    def plot_piece_td(self):
+        fig = plt.figure(figsize = [144/11, 90/11], dpi = 220)
+        ax = fig.add_subplot(111)
+        for section in self.sections:
+            for group in section.groups:
+                # print('prase td bounds: '+str([phrase.td_bounds for phrase in group.phrases]))
+                mins = [phrase.td_bounds[0] for phrase in group.phrases]
+                extents = [phrase.td_bounds[1] - phrase.td_bounds[0] for phrase in group.phrases]
+                combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+                # for lines
+                pb = np.array(group.phrase_bounds)
+                pb[:, 0] = pb[:, 0] + section.start_time
+                for p_index in range(group.nop):
+                    for inst in group.instruments:
+                        plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].td for i in range(2)], \
+                        color=inst.color, alpha = 1, linewidth=2)
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.xlim(0, self.dur_tot)
+        xlocs = plt.xticks()[0]
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(0, self.dur_tot)
+        plt.yscale('log', basey=2)
+        ylocs = plt.yticks()[0]
+        plt.yticks(ylocs, [str(i) for i in ylocs])
+        plt.ylim(((1/golden)**2) * self.td_max / (2**self.td_octaves), self.td_max)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/temporal_densities/piece_td.png')
         plt.close()
 
     def set_full_piece_range(self):
@@ -443,7 +594,7 @@ class Piece:
 
     def init_progressBar(self):
         nos = self.nos
-        printProgressBar(0, nos, prefix='Progress:', suffix='Complete', length=50)
+        print_progress_bar(0, nos, prefix='Progress:', suffix='Complete', length=50)
 
     def make_sections(self):
         sections = []
@@ -454,7 +605,7 @@ class Piece:
         sd = self.section_durs
         fpr = self.full_piece_range
         start_times = [sum(sd[:i]) for i in range(nos)]
-        tdm = self.td_min
+        tdm = self.td_max
         tdo = self.td_octaves
         for i in range(nos):
             p = self.partitions[i]
@@ -475,18 +626,12 @@ class Piece:
         self.sections = sections
 
     def init_dirs(self):
-        path1 = 'saves/figures/sections'
-        if os.path.exists(path1):
-            shutil.rmtree(path1)
-        os.mkdir(path1)
-        path2 = 'saves/figures/phrases'
-        if os.path.exists(path2):
-            shutil.rmtree(path2)
-        os.mkdir(path2)
-        path3 = 'saves/figures/ranges'
-        if os.path.exists(path3):
-            shutil.rmtree(path3)
-        os.mkdir(path3)
+        dirs = ['sections', 'phrases', 'ranges', 'temporal_densities']
+        paths = ['saves/figures/' + dir for dir in dirs]
+        for i in range(len(dirs)):
+            if os.path.exists(paths[i]): shutil.rmtree(paths[i])
+            os.mkdir(paths[i])
+
 
     def set_partitions(self):
         self.partitions = dc_alg(list(get_partition(len(self.instruments))), self.nos)
@@ -503,7 +648,7 @@ class Piece:
     def rest_delegation(self):
         probs = [1/3, 1/3, 1/3]
         loc = functools.partial(np.random.choice, np.arange(3), p=probs)
-        rest_ratio = generalized_delegator(loc, get_rest_ratio, self.rr_max, self.midpoints, self.rr_min)
+        rest_ratio = generalized_delegator(loc, get_rr, self.rr_max, self.midpoints, self.rr_min)
         rdur_nCVI = generalized_delegator(loc, get_rdur_nCVI, self.rdur_nCVI_max, self.midpoints)
         rspread_nCVI = generalized_delegator(loc, get_rspread_nCVI, self.rspread_nCVI_max, self.midpoints)
         rtemp_density = generalized_delegator(loc, get_rtemp_density, self.rtemp_density_min, self.midpoints)
@@ -591,8 +736,8 @@ class Piece:
             for group in section.groups:
                 print(f"Group {str(group.group_num)}: ", file=file)
                 print(f"pitch set: {', '.join([str(i) for i in group.pitch_set])}", file=file)
-                rmin = midi_pitch_to_note_name(min(group.full_group_range))
-                rmax = midi_pitch_to_note_name(max(group.full_group_range))
+                rmin = mp_to_nn(min(group.full_group_range))
+                rmax = mp_to_nn(max(group.full_group_range))
                 print(f"full range: {str(rmin)} - {str(rmax)}", file=file)
                 print('', file=file)
             print('', file=file)
@@ -609,7 +754,7 @@ class Piece:
                     ax.broken_barh(pb, (sum(group.section_partition[:group.group_num - 1]), len(group.instruments)), color=(inst.color), alpha = 1/len(group.instruments))
         plt.xlim(0, self.dur_tot)
         plt.yticks([], [])
-        xlocs, xlabels = plt.xticks()
+        xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
         plt.xlim(0, self.dur_tot)
         plt.tight_layout()
