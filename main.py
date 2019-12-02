@@ -25,7 +25,7 @@ nos = 5 + np.random.choice(np.arange(5))
 # root structure nCVI - or root structure "wobble"
 rsw = np.random.uniform(5, 20)
 # event level rhythmic wobble
-ewob_max = 15
+rhythm_nCVI_max = 15
 # minimum temporal density
 td_max = 5
 # "octaves" of temporal density, "below" td_max
@@ -44,6 +44,6 @@ rtd_min = 8
 # minimum rest ratio
 rr_min = 0.25
 
-piece = Piece(dur_tot, chord, insts, nos, rsw, ewob_max, td_max, td_oct, dyns,\
-                rr_max, rdm, rsm, rtd_min, rr_min)
+piece = Piece(dur_tot, chord, insts, nos, rsw, rhythm_nCVI_max, td_max, td_oct, \
+        dyns, rr_max, rdm, rsm, rtd_min, rr_min)
 pickle.dump(piece, open('saves/pickles/piece.p', 'wb'))

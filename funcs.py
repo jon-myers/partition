@@ -161,11 +161,9 @@ def nn_to_mp(note_name):
     notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     return 12 * int(note_name[(-1)]) + notes.index(note_name[:-1])
 
-
 def lin_interp(x, start, end):
     dist = end - start
     return start + x * dist
-
 
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd='\r'):
     """
