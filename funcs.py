@@ -32,36 +32,19 @@ def dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0):
 def hz_to_cents(hz, root):
     return 1200 * np.log2(hz / root)
 
-
-def dc_weight_finder(choices, alpha, weights, dictionary='no', weights_dict={}):
+def dc_weight_finder(choices, alpha, weights, test_epochs=500):
     choices = np.arange(len(choices))
-    if dictionary == 'yes':
-        if (
-         weights, alpha) in weights_dict:
-            pass
-        return weights_dict[(weights, alpha)]
-    else:
-        weights_ = [i / sum(weights) for i in weights]
-        for q in range(2):
-            for i in range(len(choices)):
-                y = dc_alg(choices, 1000, alpha, weights)
-                result = np.count_nonzero(y == choices[i]) / 1000
-                count = 0
-                while abs(result - weights_[i]) > 0.005:
-                    if result > weights_[i]:
-                        weights[i] = weights[i] / 8
-                    elif result < weights_[i]:
-                        weights[i] = weights[i] * 7
-                    else:
-                        weights = [j / sum(weights) for j in weights]
-                        z = dc_alg(choices, 1000, alpha, weights)
-                        result = np.count_nonzero(z == choices[i]) / 1000
-                        count += 1
-
-        if dictionary == 'yes':
-            weights_dict[(weights, alpha)] = weights
-        return weights
-
+    weights_ = [i / sum(weights) for i in weights]
+    max_off = .011
+    while max_off > 0.01:
+        y = dc_alg(choices, test_epochs, alpha, weights)
+        #this should be rewritten as a np function
+        results = np.array([np.count_nonzero(y==choices[i]) / test_epochs for i in choices])
+        diff = weights_ / results
+        weights *= diff
+        weights /= sum(weights)
+        max_off = np.max(1 - diff)
+    return weights
 
 def weighted_dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0, weights_dict={}):
     if np.any(weights) != 0:
