@@ -120,14 +120,37 @@ def normal_distribution_maker(bins):
     return distribution
 
 
+def tunable_distribution_maker(bins, center=0, spread=1):
+    """Bins are size of distribution, center is location of peak, from 0 - 1,
+    spread is sharpness of peak, with 0 being sharper than 1 """
+    spread = 1 - spread
+    center = 1-center
+    distribution = np.random.normal(size=10000)
+    dmax = np.max(distribution)
+    dmin = np.min(distribution)
+    dmax = np.max(np.abs(np.array([dmax, dmin])))
+    spread *= (dmax)
+    if bins %2 == 1:
+        bins_ = 2 * bins - 1
+        bottom = np.int(np.round(center*(bins-1)))
+        distribution = np.histogram(distribution, range=(-1*spread, spread), bins=bins_, density=True)[0][bottom:bottom+bins]
+    else:
+        bins_ = 2 * bins
+        bottom = np.int(np.round(center*(bins)))
+        distribution = np.histogram(distribution, range=(-1*spread, spread), bins=bins_, density=True)[0][bottom:bottom+bins]
+    distribution /= np.sum(distribution)
+    return distribution
+
 def juiced_distribution_maker(bins):
     out = normal_distribution_maker(bins + 4)[2:bins + 2]
     return out / np.sum(out)
 
+# print(tunable_distribution_maker(3, 0.1, 0.3))
+
 
 def skewnorm_distribution_maker(bins, skew, focus=1.0, size=10000):
     distro = skewnorm.rvs(skew, 1, 1, size=10000)
-    distro_histro = np.histogram(distro, bins=bins, density=True)[0]
+    distro_histro = np.histogram(distro, bins=bins, range=(0,10), density=True)[0]
     distro_histro = [i ** 0.25 for i in distro_histro]
     distro_histro /= np.sum(distro_histro)
     return distro_histro
@@ -190,7 +213,7 @@ def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, lengt
 
 def spread(init, max_ratio):
     exponent = np.clip(np.random.normal() / 3, -1, 1)
-    return max_ratio ** exponent
+    return init * (max_ratio ** exponent)
 
 
 def get_partition(n):
@@ -204,7 +227,6 @@ def get_partition(n):
                     a[k] = x
                     y -= x
                     k += 1
-
             l = k + 1
             while x <= y:
                     a[k] = x
@@ -216,7 +238,6 @@ def get_partition(n):
             a[k] = x + y
             y = x + y - 1
             yield a[:k + 1]
-
 
 def secs_to_mins(secs):
     mins = np.int(secs // 60)

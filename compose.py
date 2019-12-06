@@ -3,12 +3,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from funcs import incremental_create_section_durs as icsd
 from funcs import juiced_distribution_maker as jdm
-from funcs import auto_args, nn_to_mp, dc_alg, \
-    get_partition, generalized_delegator, get_rr, get_rdur_nCVI, get_rspread_nCVI, \
-    get_rtemp_density, print_progress_bar, spread, secs_to_mins, lin_interp, \
-    mp_to_nn, golden
+from funcs import auto_args, nn_to_mp, dc_alg, get_partition,                  \
+    generalized_delegator, get_rr, get_rdur_nCVI, get_rspread_nCVI,            \
+    get_rtemp_density, print_progress_bar, spread, secs_to_mins, lin_interp,   \
+    mp_to_nn, golden, tunable_distribution_maker, weighted_dc_alg
 from math import log2
-# from funcs import *
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
@@ -17,9 +16,10 @@ class Instrument:
         self.mp_min = nn_to_mp(self.min)
         self.mp_max = nn_to_mp(self.max) + 1
         self.range = np.arange(self.mp_min, self.mp_max)
+
     def plot_range(self):
         fig = plt.figure(figsize=[6, 1.5])
-        plt.plot((self.range), [1 for i in self.range], marker='|', color=(self.color))
+        plt.plot((self.range), np.repeat(1, self.range), marker='|', color=(self.color))
         plt.xlim(24, 84)
         plt.ylim(0, 2)
         plt.xticks([12 * (2 + j) for j in range(6)], ['C' + str(j + 2) for j in range(6)])
@@ -30,6 +30,10 @@ class Instrument:
         plt.tight_layout()
         plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
 
+    # number of chords - at one extreme, block chords; at another extreme all  \
+    # single melodic contour. Could I use the range / width paradigm?
+
+
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
     @auto_args
@@ -37,17 +41,38 @@ class Phrase:
         self, instruments, section_start_time, phrase_start_time, duration,    \
         full_reg, reg_width, reg_center, full_piece_range, td_frame_top,       \
         td_octaves, td_width, td_center, nCVI_width, nCVI_center,              \
-        rhythm_nCVI_max, pitch_set, weights                                    \
+        rhythm_nCVI_max, pitch_set, weights, weight_traj, section_duration,    \
+        cs_width, cs_center
         ):
         self.midpoint = self.phrase_start_time + (self.duration/2)
         self.set_register()
         self.set_td()
         self.set_nCVI()
         self.non = np.int(np.floor(self.duration * self.td))
-        if self.non == 0: self.non = 1
-        self.note_durations = icsd(self.non, self.nCVI) * self.duration
-        self.note_starts = [np.sum(self.note_durations[:i]) for i in range(self.non)]
+        if self.non == 0:
+            self.non = 1
+        self.note_durs = icsd(self.non, self.nCVI) * self.duration
+        self.note_starts = [np.sum(self.note_durs[:i]) for i in range(self.non)]
+        self.noi = len(instruments)
+        self.set_cs_probs()
+        self.make_cs_array()
+        self.set_weights()
         self.adjust_pitchset()
+
+    def make_cs_array(self):
+        if self.noi == 1:
+            self.cs_array = np.repeat(1,self.non)
+        else:
+            self.cs_array = np.random.choice(np.arange(self.noi)+1, self.non, p=self.cs_probs)
+
+
+    def set_cs_probs(self):
+        self.cs_probs = tunable_distribution_maker(self.noi, self.cs_center, self.cs_width)
+
+    def set_weights(self):
+        x  = (self.midpoint - self.section_start_time) / self.section_duration
+        wt = self.weight_traj
+        self.weights_ = np.array([lin_interp(x, wt[0][i], wt[1][i]) for i in range(len(wt[0]))])
 
     def adjust_pitchset(self):
         """Make the pitchset and weights align with the assigned register"""
@@ -55,8 +80,8 @@ class Phrase:
         is_in = np.isin(self.pitch_set, register_pitch_set)
         if not np.all(is_in):
             self.pitch_set = self.pitch_set[is_in]
-            self.weights = self.weights[is_in]
-            self.weights = self.weights / np.sum(self.weights)
+            self.weights_ = self.weights[is_in]
+            self.weights_ = self.weights / np.sum(self.weights_)
 
     def set_register(self):
         rmin = min(self.full_reg)
@@ -70,7 +95,7 @@ class Phrase:
         self.register = range(int(center - (extent/2)), int(center + (extent/2)))
 
     def set_td(self):
-        """Sets the temporal density """
+        """Sets the temporal density"""
         td_max = np.log2(self.td_frame_top)
         td_min = td_max - self.td_octaves
         max_extent = td_max - td_min
@@ -86,7 +111,7 @@ class Phrase:
 
     def set_nCVI(self):
         """Sets the nCVI, first by doing ranges like td or register, then by
-        choosing a uniform random from in that range """
+        choosing a uniform random from in that range"""
         nCVI_max = self.rhythm_nCVI_max
         nCVI_min = 0
         max_extent = nCVI_max - nCVI_min
@@ -106,7 +131,7 @@ class Group:
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num,           \
         start_time, duration, section_partition, reg_width, reg_center,        \
         full_piece_range, td_max, td_octaves, td_width, td_center, nCVI_width, \
-        nCVI_center, rhythm_nCVI_max
+        nCVI_center, rhythm_nCVI_max, cs_width, cs_center
         ):
         self.stitch = 0
         self.make_save_dir()
@@ -114,13 +139,29 @@ class Group:
         self.set_phrase_bounds()
         self.plot_group_phrase_bounds()
         self.set_full_group_range()
-        # number of phrases
         self.nop = len(self.phrase_bounds)
         self.phrase_traj_interp()
         self.set_td_frame()
+        self.make_weight_traj()
         self.make_phrases()
         self.plot_group_regs()
 
+        # from each phrase, take the sum of cs_array to get the number of necessary
+        # notes needed in the note stream. Can the 'counts' carry over from one
+        # weighted dc_alg to the next?
+
+        # note streams will have the possibility of unison somehow: use dc_alg,
+        # pause to investigate some options in the inspector.
+
+    # def make_note_streams(self):
+
+
+    def make_weight_traj(self):
+        a = np.array([spread(i, 1.25) for i in self.weights])
+        a = a / np.sum(a)
+        b = np.array([spread(i, 1.25) for i in self.weights])
+        b = b / np.sum(b)
+        self.weight_traj = [a, b]
     def set_td_frame(self):
         mults = np.array([inst.td_mult for inst in self.instruments])
         avg_td_mult = 2**np.average(np.log2(mults))
@@ -138,6 +179,8 @@ class Group:
         tdcs = []
         nws = []
         ncs = []
+        csws = []
+        cscs = []
 
         for pb in self.phrase_bounds:
             # start time
@@ -158,18 +201,26 @@ class Group:
             nw = lin_interp(mp_x, self.nCVI_width[0], self.nCVI_width[1])
             # nCVI center
             nc = lin_interp(mp_x, self.nCVI_center[0], self.nCVI_center[1])
+            # chord_size width
+            csw = lin_interp(mp_x, self.cs_width[0], self.cs_width[1])
+            # chord size center
+            csc = lin_interp(mp_x, self.cs_center[0], self.cs_center[1])
             rws.append(rw)
             rcs.append(rc)
             tdws.append(tw)
             tdcs.append(tc)
             nws.append(nw)
             ncs.append(nc)
+            csws.append(csw)
+            cscs.append(csc)
         self.phrase_rws = rws
         self.phrase_rcs = rcs
         self.phrase_tdws = tdws
         self.phrase_tdcs = tdcs
         self.phrase_nws = nws
         self.phrase_ncs = ncs
+        self.phrase_csws = csws
+        self.phrase_cscs = cscs
 
     def make_phrases(self):
         phrases = []
@@ -182,6 +233,8 @@ class Group:
         rnm = self.rhythm_nCVI_max
         ps = self.pitch_set
         w = self.weights
+        wt = self.weight_traj
+        sd = self.duration
         for i in range(self.nop):
             pst = self.phrase_bounds[i][0] + sst
             dur = self.phrase_bounds[i][1]
@@ -191,8 +244,10 @@ class Group:
             tdc = self.phrase_tdcs[i]
             nw = self.phrase_nws[i]
             nc = self.phrase_ncs[i]
+            csw = self.phrase_csws[i]
+            csc = self.phrase_cscs[i]
             phrase = Phrase(ins, sst, pst, dur, fgr, rw, rc, fpr, tdft, tdo,   \
-                tdw, tdc, nw, nc, rnm, ps, w)
+                tdw, tdc, nw, nc, rnm, ps, w, wt, sd, csw, csc)
             phrases.append(phrase)
         self.phrases = phrases
 
@@ -255,13 +310,13 @@ class Group:
         fig = plt.figure(figsize=[8, 1.0 + 0.5 * len(self.instruments)])
         ax = fig.add_subplot(111)
         for i, inst in enumerate(self.instruments[::-1]):
-            plt.plot((inst.range), [i + 0.5 for x in inst.range], marker='|', color=(inst.color),
-              label=(inst.name))
+            plt.plot((inst.range), [i + 0.5 for x in inst.range], marker='|',  \
+                color=(inst.color), label=(inst.name))
             plt.annotate((inst.min), (inst.mp_min, 0.75 + i), ha='center')
             plt.annotate((inst.max), (inst.mp_max, 0.75 + i), ha='center')
         plt.xlim(24, 84)
         plt.ylim(0, len(self.instruments) + 1)
-        plt.xticks([12 * (2 + j) for j in range(7)], ['C' + str(j + 2) for j in range(7)])
+        plt.xticks([12*(2+j) for j in range(7)],['C'+str(j+2) for j in range(7)])
         plt.yticks([])
         plt.title('Section ' + str(self.section_num) + ' Group ' + str(self.group_num))
         handles, labels = ax.get_legend_handles_labels()
@@ -293,7 +348,7 @@ class Section:
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density,  \
         nos, start_time, reg_widths, reg_centers, full_piece_range, td_max,    \
         td_octaves, td_widths, td_centers, nCVI_widths, nCVI_centers,          \
-        rhythm_nCVI_max
+        rhythm_nCVI_max, cs_widths, cs_centers
         ):
         # number of groups
         self.nog = len(self.partition)
@@ -483,9 +538,11 @@ class Section:
             tc = self.td_centers[i]
             nw = self.nCVI_widths[i]
             nc = self.nCVI_centers[i]
+            csw = self.cs_widths[i]
+            csc = self.cs_centers[i]
             g = Group(
                 gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw,  \
-                rc, fpr, tm, to, tw, tc, nw, nc, rnm)
+                rc, fpr, tm, to, tw, tc, nw, nc, rnm, csw, csc)
             groups.append(g)
         self.groups = groups
 
@@ -516,7 +573,7 @@ class Section:
         spread_ = []
         params = [self.rest_ratio, self.rest_dur_nCVI, self.rest_spread_nCVI, self.rtemp_density]
         for i, param in enumerate(params):
-            s = [[spread(param, max_ratio) * param for k in range(j)] for j in rp_partition[i]]
+            s = [[spread(param, max_ratio) for k in range(j)] for j in rp_partition[i]]
             s = [j for j in itertools.chain.from_iterable(s)]
             spread_.append(s)
         self.rr_spread, self.rdnCVI_spread, self.rsnCVI_spread, self.rtd_spread = spread_
@@ -570,6 +627,8 @@ class Piece:
         self.reg_widths, self.reg_centers = self.delegation()
         self.td_widths, self.td_centers = self.delegation()
         self.nCVI_widths, self.nCVI_centers = self.delegation()
+        # chord size
+        self.cs_widths, self.cs_centers = self.delegation()
         self.set_full_piece_range()
         self.make_sections()
         self.print_rest_params()
@@ -652,7 +711,7 @@ class Piece:
                         ax.broken_barh([pb[p_index]], combs[p_index], \
                         color=(inst.color), alpha = (1/3) / len(group.instruments))
                         #plot actual td
-                        plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].nCVI_width for i in range(2)], \
+                        plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].nCVI for i in range(2)], \
                         color=inst.color, alpha = 1, linewidth=2 )
         plt.ylim(0, self.rhythm_nCVI_max)
         plt.xlim(0, self.dur_tot)
@@ -730,9 +789,11 @@ class Piece:
             tc = self.td_centers[i]
             nw = self.nCVI_widths[i]
             nc = self.nCVI_centers[i]
+            csw = self.cs_widths[i]
+            csc = self.cs_centers[i]
             sec = Section(
                     c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, \
-                    rc, fpr, tdm, tdo, tw, tc, nw, nc, rnm)
+                    rc, fpr, tdm, tdo, tw, tc, nw, nc, rnm, csw, csc)
             sections.append(sec)
         self.sections = sections
 
@@ -822,11 +883,12 @@ class Piece:
             out.append(sec_out)
         return out
 
-    def set_weights(self, standard_dist=0.2):
+    def set_weights(self, standard_dist=0.6):
         weights = np.random.normal(0.5, standard_dist, len(self.chord))
         while np.all((weights == np.abs(weights)), axis=0) == False:
                 weights = np.random.normal(0.5, standard_dist, len(self.chord))
         self.global_chord_weights = weights / np.sum(weights)
+        print (self.global_chord_weights)
 
     def print_rest_params(self):
         file = open('saves/text_printouts/rest_params.txt', 'w')
