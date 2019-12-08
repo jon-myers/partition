@@ -36,7 +36,9 @@ def dc_weight_finder(choices, alpha, weights, test_epochs=500):
     choices = np.arange(len(choices))
     weights_ = [i / sum(weights) for i in weights]
     max_off = .011
+    # cts_ = 0
     while max_off > 0.01:
+        # print(cts_)
         y = dc_alg(choices, test_epochs, alpha, weights)
         #this should be rewritten as a np function
         results = np.array([np.count_nonzero(y==choices[i]) / test_epochs for i in choices])
@@ -44,10 +46,20 @@ def dc_weight_finder(choices, alpha, weights, test_epochs=500):
         weights *= diff
         weights /= sum(weights)
         max_off = np.max(1 - diff)
+        # cts_+=1
+        # print(cts_)
     return weights
 
 def weighted_dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0, weights_dict={}):
     if np.any(weights) != 0:
+        # this basically says if its not going to work, just double the length
+        #of the choice array, and try again. Might be better to just double the
+        # one value thats above 0.5 . Or, might make more sense to just do a straight
+        # random choice.
+        if np.max(weights) >= 0.5:
+            choices = np.tile(choices, 2)
+            weights = np.tile(weights/2, 2)
+            counts = np.tile(counts, 2)
         weights = dc_weight_finder(choices, alpha, weights)
     selections = dc_alg(choices, epochs, alpha, weights, counts, verbosity)
     return selections

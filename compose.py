@@ -7,7 +7,7 @@ from funcs import auto_args, nn_to_mp, dc_alg, get_partition,                  \
     generalized_delegator, get_rr, get_rdur_nCVI, get_rspread_nCVI,            \
     get_rtemp_density, print_progress_bar, spread, secs_to_mins, lin_interp,   \
     mp_to_nn, golden, tunable_distribution_maker, weighted_dc_alg
-from math import log2
+from math import log2, ceil
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
@@ -16,6 +16,7 @@ class Instrument:
         self.mp_min = nn_to_mp(self.min)
         self.mp_max = nn_to_mp(self.max) + 1
         self.range = np.arange(self.mp_min, self.mp_max)
+        self.notes = []
 
     def plot_range(self):
         fig = plt.figure(figsize=[6, 1.5])
@@ -32,6 +33,8 @@ class Instrument:
 
     # number of chords - at one extreme, block chords; at another extreme all  \
     # single melodic contour. Could I use the range / width paradigm?
+
+    
 
 
 class Phrase:
@@ -52,12 +55,57 @@ class Phrase:
         if self.non == 0:
             self.non = 1
         self.note_durs = icsd(self.non, self.nCVI) * self.duration
-        self.note_starts = [np.sum(self.note_durs[:i]) for i in range(self.non)]
+        self.note_starts = np.array([np.sum(self.note_durs[:i]) for i in range(self.non)])
         self.noi = len(instruments)
         self.set_cs_probs()
         self.make_cs_array()
         self.set_weights()
         self.adjust_pitchset()
+        self.make_note_streams()
+        self.delegate_note_stream()
+
+
+    # make a big matrix, the width is all the notes, the height is the insts.
+    def delegate_note_stream(self):
+        ct=0
+        note_matrix = np.zeros((len(self.instruments),len(self.cs_array)), dtype=int)
+        for i, cs in enumerate(self.cs_array):
+            #choose which inst to send chord to
+            inst_choices = np.random.choice(np.arange(len(self.instruments)), replace=False, size=cs)
+            for j in inst_choices:
+                note_matrix[j,i] = self.note_stream[ct]
+                ct+=1
+
+        # bring into correct octave, hopefully with some lookback, so that slightly more
+        # often it stays in the closer octave to previous note
+        for nm_i, inst_pcs in enumerate(note_matrix):
+            for pc_i, pc in enumerate(inst_pcs):
+                if pc != 0:
+                    choices = [pc + 12*i for i in range(6) if pc+12*i in self.register]
+                    if 'prev' in locals():
+                        diffs = np.abs(choices - prev)+6
+                        print('diffs: '+str(diffs))
+                        weights = 1/diffs
+                        weights /= np.sum(weights)
+                        # print(weights)
+                        prev = np.random.choice(choices, p = weights)
+                    else:
+                        prev = np.random.choice(choices)
+                    note_matrix[nm_i,pc_i] = prev
+
+
+
+        self.note_matrix = note_matrix
+
+    def make_note_streams(self):
+        ns_len = np.sum(self.cs_array)
+        if len(self.pitch_set) == 1:
+            self.note_stream = np.repeat(self.pitch_set, ns_len)
+        else:
+            choice_list = [[self.pitch_set[i] for j in range(int(ceil(self.weights_[i] * ns_len)))] for i in range(len(self.pitch_set))]
+            choice_list = [i for i in itertools.chain.from_iterable(choice_list)]
+            self.note_stream = np.random.choice(choice_list, replace=False, size = ns_len)
+
 
     def make_cs_array(self):
         if self.noi == 1:
@@ -80,14 +128,14 @@ class Phrase:
         is_in = np.isin(self.pitch_set, register_pitch_set)
         if not np.all(is_in):
             self.pitch_set = self.pitch_set[is_in]
-            self.weights_ = self.weights[is_in]
-            self.weights_ = self.weights / np.sum(self.weights_)
+            self.weights_ = self.weights_[is_in]
+            self.weights_ = self.weights_ / np.sum(self.weights_)
 
     def set_register(self):
         rmin = min(self.full_reg)
         rmax = max(self.full_reg)
         max_extent = rmax - rmin
-        min_extent = 6
+        min_extent = 12
         extent = int(round(lin_interp(self.reg_width, min_extent, max_extent)))
         min_center = rmin + (extent/2)
         max_center = rmax - (extent/2)
@@ -145,16 +193,6 @@ class Group:
         self.make_weight_traj()
         self.make_phrases()
         self.plot_group_regs()
-
-        # from each phrase, take the sum of cs_array to get the number of necessary
-        # notes needed in the note stream. Can the 'counts' carry over from one
-        # weighted dc_alg to the next?
-
-        # note streams will have the possibility of unison somehow: use dc_alg,
-        # pause to investigate some options in the inspector.
-
-    # def make_note_streams(self):
-
 
     def make_weight_traj(self):
         a = np.array([spread(i, 1.25) for i in self.weights])
@@ -883,7 +921,7 @@ class Piece:
             out.append(sec_out)
         return out
 
-    def set_weights(self, standard_dist=0.6):
+    def set_weights(self, standard_dist=0.4):
         weights = np.random.normal(0.5, standard_dist, len(self.chord))
         while np.all((weights == np.abs(weights)), axis=0) == False:
                 weights = np.random.normal(0.5, standard_dist, len(self.chord))
