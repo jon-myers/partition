@@ -3,16 +3,13 @@ import numpy as np
 from matplotlib import pyplot as plt
 from funcs import incremental_create_section_durs as icsd
 from funcs import juiced_distribution_maker as jdm
-from funcs import auto_args, nn_to_mp, dc_alg, get_partition,                  \
-    generalized_delegator, get_rr, get_rdur_nCVI, get_rspread_nCVI,            \
-    get_rtemp_density, print_progress_bar, spread, secs_to_mins, lin_interp,   \
-    mp_to_nn, golden, tunable_distribution_maker, weighted_dc_alg
+from funcs import *
 from math import log2, ceil
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
     @auto_args
-    def __init__(self, name, min, max, instnum, color, td_mult):
+    def __init__(self, name, min, max, instnum, color, td_mult, midi_name):
         self.mp_min = nn_to_mp(self.min)
         self.mp_max = nn_to_mp(self.max) + 1
         self.range = np.arange(self.mp_min, self.mp_max)
@@ -31,11 +28,11 @@ class Instrument:
         plt.tight_layout()
         plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
 
-    # number of chords - at one extreme, block chords; at another extreme all  \
-    # single melodic contour. Could I use the range / width paradigm?
-
-    
-
+        # dyns
+    def make_notes(self, note_stream, starts, durs):
+        for n_i, note in enumerate(note_stream):
+            if note != 0:
+                self.notes.append([note, starts[n_i], durs[n_i], 60])
 
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
@@ -55,6 +52,7 @@ class Phrase:
         if self.non == 0:
             self.non = 1
         self.note_durs = icsd(self.non, self.nCVI) * self.duration
+        if False in self.note_durs: print ('got em')
         self.note_starts = np.array([np.sum(self.note_durs[:i]) for i in range(self.non)])
         self.noi = len(instruments)
         self.set_cs_probs()
@@ -63,7 +61,11 @@ class Phrase:
         self.adjust_pitchset()
         self.make_note_streams()
         self.delegate_note_stream()
+        self.set_notes()
 
+    def set_notes(self):
+        for i, row in enumerate(self.note_matrix):
+            self.instruments[i].make_notes(row, self.note_starts+self.phrase_start_time, self.note_durs)
 
     # make a big matrix, the width is all the notes, the height is the insts.
     def delegate_note_stream(self):
@@ -82,9 +84,9 @@ class Phrase:
             for pc_i, pc in enumerate(inst_pcs):
                 if pc != 0:
                     choices = [pc + 12*i for i in range(6) if pc+12*i in self.register]
+                    choice= [i for i in choices if i in self.instruments[nm_i].range]
                     if 'prev' in locals():
                         diffs = np.abs(choices - prev)+6
-                        print('diffs: '+str(diffs))
                         weights = 1/diffs
                         weights /= np.sum(weights)
                         # print(weights)
@@ -92,9 +94,6 @@ class Phrase:
                     else:
                         prev = np.random.choice(choices)
                     note_matrix[nm_i,pc_i] = prev
-
-
-
         self.note_matrix = note_matrix
 
     def make_note_streams(self):
@@ -179,9 +178,10 @@ class Group:
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num,           \
         start_time, duration, section_partition, reg_width, reg_center,        \
         full_piece_range, td_max, td_octaves, td_width, td_center, nCVI_width, \
-        nCVI_center, rhythm_nCVI_max, cs_width, cs_center
+        nCVI_center, rhythm_nCVI_max, cs_width, cs_center, stitch
         ):
-        self.stitch = 0
+        # print(self.stitch)
+        # print('')
         self.make_save_dir()
         self.plot_group_ranges()
         self.set_phrase_bounds()
@@ -311,6 +311,8 @@ class Group:
         if self.stitch == 1 or self.stitch == 2:
             if num_of_rests < 1:
                 num_of_rests == 1
+        if self.stitch == 3:
+            num_of_plays = num_of_rests - 1
         else:
             num_of_plays = num_of_rests
         rest_dur_tot = self.rest_ratio * self.duration
@@ -394,32 +396,18 @@ class Section:
         self.get_weights()
         self.get_pitch_sets()
         self.make_groups()
+
+    def __continue__(self, stitches):
+        self.stitches = stitches
         self.set_rparam_spread_for_groups()
-        # self.set_td_delegation()
-        os.mkdir('saves/figures/sections/section_' + str(section_num))
+        os.mkdir('saves/figures/sections/section_' + str(self.section_num))
         self.instantiate_groups()
         self.plot_section_phrase_bounds()
-        # self.plot_section_regs()
         self.plot_section_phrase_ranges()
         self.plot_section_td()
         self.plot_section_td_and_range()
         self.plot_section_nCVI_and_range()
         self.progress()
-
-    # def plot_section_regs(self):
-    #     fig = plt.figure(figsize=[8, 4])
-    #     ax = fig.add_subplot(111)
-    #     for group in self.groups:
-    #         mins = [min(phrase.register) for phrase in group.phrases]
-    #         maxs = [max(phrase.register) for phrase in group.phrases]
-    #         mps = [phrase.midpoint for phrase in group.phrases]
-    #         for inst in group.instruments:
-    #             ax.fill_between(mps, mins, maxs, color = inst.color, alpha = (1 / len(group.instruments)))
-    #     plt.ylim(min(self.full_piece_range), max(self.full_piece_range))
-    #     plt.xlim(self.start_time, self.start_time + self.duration)
-    #     plt.tight_layout()
-    #     plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/range_envelope.png')
-    #     plt.close()
 
     def plot_section_phrase_ranges(self):
         fig = plt.figure(figsize = [10, 4])
@@ -578,9 +566,10 @@ class Section:
             nc = self.nCVI_centers[i]
             csw = self.cs_widths[i]
             csc = self.cs_centers[i]
+            sti = self.stitches[i]
             g = Group(
                 gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw,  \
-                rc, fpr, tm, to, tw, tc, nw, nc, rnm, csw, csc)
+                rc, fpr, tm, to, tw, tc, nw, nc, rnm, csw, csc, sti)
             groups.append(g)
         self.groups = groups
 
@@ -635,11 +624,11 @@ class Section:
             print('\n')
 
     def get_pitch_sets(self):
-        dist = jdm(len(self.section_chord))
+        dist = jdm(len(self.section_chord)-1)
         pitch_sets = []
         indexes = []
         for group in range(len(self.partition)):
-            pcs_size = np.random.choice((np.arange(len(self.section_chord)) + 1), p=dist)
+            pcs_size = np.random.choice((np.arange(len(self.section_chord)-1) + 2), p=dist)
             ps_index = np.random.choice((np.arange(len(self.section_chord))), p=(self.section_weights), size=pcs_size, replace=False)
             ps = self.section_chord[ps_index]
             pitch_sets.append(ps)
@@ -669,6 +658,9 @@ class Piece:
         self.cs_widths, self.cs_centers = self.delegation()
         self.set_full_piece_range()
         self.make_sections()
+        self.make_stitches()
+        for s_i, section in enumerate(self.sections):
+            section.__continue__(self.stitches[s_i])
         self.print_rest_params()
         self.print_pitch_params()
         self.plot_piece_phrase_bounds()
@@ -676,6 +668,26 @@ class Piece:
         self.plot_piece_td_and_range()
         self.plot_piece_nCVI_and_range()
         self.plot_piece_td()
+        self.print_midi()
+
+    def make_stitches(self):
+        self.stitches = [[0 for i in range(len(section.grouping))] for section in self.sections]
+        for s_i in range(len(self.sections)-1):
+            a = self.sections[s_i].grouping
+            b = self.sections[s_i+1].grouping
+            stitch = [i for i in a if i in b]
+            for st in stitch:
+                if self.stitches[s_i][a.index(st)] == 1:
+                    self.stitches[s_i][a.index(st)] = 3
+                else:
+                    self.stitches[s_i][a.index(st)] = 2
+                self.stitches[s_i+1][b.index(st)] = 1
+
+    def print_midi(self):
+        path = 'saves/midi/'
+        for inst in self.instruments:
+            name = fill_space(inst.name) + '.mid'
+            easy_midi_generator(inst.notes, path + name, inst.midi_name)
 
     def plot_piece_phrase_ranges(self):
         fig = plt.figure(figsize = [144/11, 90/22], dpi = 220)
@@ -921,12 +933,12 @@ class Piece:
             out.append(sec_out)
         return out
 
-    def set_weights(self, standard_dist=0.4):
+    def set_weights(self, standard_dist=0.25):
         weights = np.random.normal(0.5, standard_dist, len(self.chord))
         while np.all((weights == np.abs(weights)), axis=0) == False:
                 weights = np.random.normal(0.5, standard_dist, len(self.chord))
         self.global_chord_weights = weights / np.sum(weights)
-        print (self.global_chord_weights)
+        # print (self.global_chord_weights)
 
     def print_rest_params(self):
         file = open('saves/text_printouts/rest_params.txt', 'w')

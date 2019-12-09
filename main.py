@@ -11,14 +11,14 @@ keys = list(cols.keys())
 inds = np.random.choice(keys, size=5, replace=False)
 td_mults = [(1/golden**0.5)**i for i in range(5)]
 
-tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, cols[inds[0]], td_mults[0])
-tr2 = Instrument('Trumpet 2', 'A3', 'A5', 2, cols[inds[1]], td_mults[1])
-hn = Instrument('Horn', 'C3', 'C5', 3, cols[inds[2]], td_mults[2])
-trb = Instrument('Trombone', 'G2', 'G4', 4, cols[inds[3]], td_mults[3])
-btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, cols[inds[4]], td_mults[4])
+tr1 = Instrument('Trumpet 1', 'C4', 'C6', 1, cols[inds[0]], td_mults[0], 'Trumpet')
+tr2 = Instrument('Trumpet 2', 'A3', 'A5', 2, cols[inds[1]], td_mults[1], 'Trumpet')
+hn = Instrument('Horn', 'C3', 'C5', 3, cols[inds[2]], td_mults[2], 'French Horn')
+trb = Instrument('Trombone', 'G2', 'G4', 4, cols[inds[3]], td_mults[3], 'Trombone')
+btrb = Instrument('Bass Trombone', 'D2', 'D4', 5, cols[inds[4]], td_mults[4], 'Tuba')
 
 dur_tot = 14 * 60
-chord = [0, 2, 3, 7, 8, 10]
+chord = [0, 2, 3, 5, 7, 8, 10]
 insts = [tr1, tr2, hn, trb, btrb]
 # number of sections
 nos = 5 + np.random.choice(np.arange(5))
@@ -27,7 +27,7 @@ rsw = np.random.uniform(5, 20)
 # event level rhythmic wobble
 rhythm_nCVI_max = 15
 # minimum temporal density
-td_max = 5
+td_max = 3
 # "octaves" of temporal density, "below" td_max
 td_oct = 3
 dyns = ['pp', 'p', 'mp', 'mf']

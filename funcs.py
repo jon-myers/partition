@@ -65,20 +65,16 @@ def weighted_dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0
     return selections
 
 
-def easy_midi_generator(notes, file_name, midi_inst_name, pitch_bends='no'):
-    notes = [[int(i[0]), float(i[1]), float(i[2]), i[3]] for i in notes]
+def easy_midi_generator(notes, file_name, midi_inst_name):
+    # notes = [[int(i[0]), float(i[1]), float(i[2]), i[3]] for i in notes]
     notes = sorted(notes, key=(lambda x: x[1]))
     score = pretty_midi.PrettyMIDI()
     instrument_program = pretty_midi.instrument_name_to_program(midi_inst_name)
     instrument = pretty_midi.Instrument(program=instrument_program)
-    if type(pitch_bends) != str:
-        for i in pitch_bends:
-            instrument.pitch_bends.append(pretty_midi.PitchBend(pitch=(i[0]), time=(i[1])))
-
     for n, note in enumerate(notes):
-        for later_note in notes[n + 1:]:
-            if later_note[0] == note[0]:
-                note[2] = later_note[1] <= note[1] + note[2] and 0.9 * (later_note[1] - note[1])
+    #     for later_note in notes[n + 1:]:
+    #         if later_note[0] == note[0]:
+    #             note[2] = later_note[1] <= note[1] + note[2] and 0.9 * (later_note[1] - note[1])
 
         note = pretty_midi.Note(velocity=(note[3]), pitch=(note[0]), start=(note[1]), end=(note[1] + note[2]))
         instrument.notes.append(note)
@@ -301,3 +297,7 @@ def auto_args(target):
 
 # the golden ratio; You never know when you'll need it!
 golden = (1 + 5**0.5) / 2
+
+
+def fill_space(text):
+    return text.replace(' ', '_')
