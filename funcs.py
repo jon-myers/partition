@@ -172,8 +172,11 @@ def mp_to_nn(midi_pitch, pcs=0):
 
 # note name to midi pitch
 def nn_to_mp(note_name):
-    notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-    return 12 * int(note_name[(-1)]) + notes.index(note_name[:-1])
+    if type(note_name) == int:
+        return note_name
+    else:
+        notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        return 12 * int(note_name[(-1)]) + notes.index(note_name[:-1])
 
 def lin_interp(x, start, end):
     dist = end - start

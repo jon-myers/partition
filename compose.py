@@ -84,8 +84,10 @@ class Phrase:
             for pc_i, pc in enumerate(inst_pcs):
                 if pc != 0:
                     choices = [pc + 12*i for i in range(6) if pc+12*i in self.register]
-                    choice= [i for i in choices if i in self.instruments[nm_i].range]
-                    if 'prev' in locals():
+                    choices = [i for i in choices if i in self.instruments[nm_i].range]
+                    if len(choices) == 0:
+                        continue
+                    elif 'prev' in locals():
                         diffs = np.abs(choices - prev)+6
                         weights = 1/diffs
                         weights /= np.sum(weights)
@@ -641,7 +643,7 @@ class Piece:
     @auto_args
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
-        rhythm_nCVI_max, td_max, td_octaves, dyns, rr_max, rdur_nCVI_max, \
+        rhythm_nCVI_max, td_max, td_octaves, max_vel, rr_max, rdur_nCVI_max, \
         rspread_nCVI_max, rtemp_density_min, rr_min):
         self.set_weights()
         self.section_durs = icsd(nos, section_dur_nCVI) * self.dur_tot
