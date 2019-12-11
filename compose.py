@@ -29,10 +29,10 @@ class Instrument:
         plt.savefig('saves/figures/ranges/' + str(self.name) + '.png')
 
         # dyns
-    def make_notes(self, note_stream, starts, durs):
+    def make_notes(self, note_stream, starts, durs, vels):
         for n_i, note in enumerate(note_stream):
             if note != 0:
-                self.notes.append([note, starts[n_i], durs[n_i], 60])
+                self.notes.append([note, starts[n_i], durs[n_i], np.int(np.round(vels))])
 
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
@@ -42,7 +42,7 @@ class Phrase:
         full_reg, reg_width, reg_center, full_piece_range, td_frame_top,       \
         td_octaves, td_width, td_center, nCVI_width, nCVI_center,              \
         rhythm_nCVI_max, pitch_set, weights, weight_traj, section_duration,    \
-        cs_width, cs_center
+        cs_width, cs_center, vel_width, vel_center, vel_max, vel_min
         ):
         self.midpoint = self.phrase_start_time + (self.duration/2)
         self.set_register()
@@ -61,11 +61,27 @@ class Phrase:
         self.adjust_pitchset()
         self.make_note_streams()
         self.delegate_note_stream()
+        self.set_vels()
         self.set_notes()
+
+
+    def set_vels(self):
+        """Sets the vels, first by doing ranges like td or register, then by
+        choosing a uniform random from in that range"""
+        vel_max = self.vel_max
+        vel_min = self.vel_min
+        max_extent = self.vel_max - self.vel_min
+        extent = lin_interp(self.vel_width, self.vel_min, self.vel_max)
+        min_center = self.vel_min + (extent/2)
+        max_center = self.vel_max - (extent/2)
+        center = lin_interp(self.vel_center, min_center, max_center)
+        self.vel_bounds = [center - extent/2, center + extent/2]
+        self.vels = np.random.uniform(self.vel_bounds[0], self.vel_bounds[1])
+
 
     def set_notes(self):
         for i, row in enumerate(self.note_matrix):
-            self.instruments[i].make_notes(row, self.note_starts+self.phrase_start_time, self.note_durs)
+            self.instruments[i].make_notes(row, self.note_starts+self.phrase_start_time, self.note_durs, self.vels)
 
     # make a big matrix, the width is all the notes, the height is the insts.
     def delegate_note_stream(self):
@@ -180,10 +196,9 @@ class Group:
         rest_dur_nCVI, rest_spread_nCVI, rtemp_density, section_num,           \
         start_time, duration, section_partition, reg_width, reg_center,        \
         full_piece_range, td_max, td_octaves, td_width, td_center, nCVI_width, \
-        nCVI_center, rhythm_nCVI_max, cs_width, cs_center, stitch
+        nCVI_center, rhythm_nCVI_max, cs_width, cs_center, stitch, vel_width,  \
+        vel_center, vel_max, vel_min
         ):
-        # print(self.stitch)
-        # print('')
         self.make_save_dir()
         self.plot_group_ranges()
         self.set_phrase_bounds()
@@ -211,6 +226,8 @@ class Group:
         os.mkdir('saves/figures/sections/section_' + str(self.section_num) + '/group_' + str(self.group_num))
 
         #interpolate the section-length parameter trajectories for each phrase
+
+        #really ugly code. Concatinate when you get some free time!
     def phrase_traj_interp(self):
         # for each phrase, assess register width and register center at midpoint
         rws = []
@@ -221,6 +238,8 @@ class Group:
         ncs = []
         csws = []
         cscs = []
+        vws = []
+        vcs = []
 
         for pb in self.phrase_bounds:
             # start time
@@ -245,6 +264,10 @@ class Group:
             csw = lin_interp(mp_x, self.cs_width[0], self.cs_width[1])
             # chord size center
             csc = lin_interp(mp_x, self.cs_center[0], self.cs_center[1])
+            # vel width
+            vw = lin_interp(mp_x, self.vel_width[0], self.vel_width[1])
+            # vel center
+            vc = lin_interp(mp_x, self.vel_center[0], self.vel_center[1])
             rws.append(rw)
             rcs.append(rc)
             tdws.append(tw)
@@ -253,6 +276,8 @@ class Group:
             ncs.append(nc)
             csws.append(csw)
             cscs.append(csc)
+            vws.append(vw)
+            vcs.append(vc)
         self.phrase_rws = rws
         self.phrase_rcs = rcs
         self.phrase_tdws = tdws
@@ -261,6 +286,8 @@ class Group:
         self.phrase_ncs = ncs
         self.phrase_csws = csws
         self.phrase_cscs = cscs
+        self.phrase_vws = vws
+        self.phrase_vcs = vcs
 
     def make_phrases(self):
         phrases = []
@@ -275,6 +302,8 @@ class Group:
         w = self.weights
         wt = self.weight_traj
         sd = self.duration
+        vmax = self.vel_max
+        vmin = self.vel_min
         for i in range(self.nop):
             pst = self.phrase_bounds[i][0] + sst
             dur = self.phrase_bounds[i][1]
@@ -286,8 +315,11 @@ class Group:
             nc = self.phrase_ncs[i]
             csw = self.phrase_csws[i]
             csc = self.phrase_cscs[i]
+            vw = self.phrase_vws[i]
+            vc = self.phrase_vcs[i]
             phrase = Phrase(ins, sst, pst, dur, fgr, rw, rc, fpr, tdft, tdo,   \
-                tdw, tdc, nw, nc, rnm, ps, w, wt, sd, csw, csc)
+                tdw, tdc, nw, nc, rnm, ps, w, wt, sd, csw, csc, vw, vc, vmax,  \
+                vmin)
             phrases.append(phrase)
         self.phrases = phrases
 
@@ -390,7 +422,8 @@ class Section:
         duration, rest_ratio, rest_dur_nCVI, rest_spread_nCVI, rtemp_density,  \
         nos, start_time, reg_widths, reg_centers, full_piece_range, td_max,    \
         td_octaves, td_widths, td_centers, nCVI_widths, nCVI_centers,          \
-        rhythm_nCVI_max, cs_widths, cs_centers
+        rhythm_nCVI_max, cs_widths, cs_centers, vel_widths, vel_centers,       \
+        vel_max, vel_min
         ):
         # number of groups
         self.nog = len(self.partition)
@@ -409,6 +442,7 @@ class Section:
         self.plot_section_td()
         self.plot_section_td_and_range()
         self.plot_section_nCVI_and_range()
+        self.plot_section_nCVIs()
         self.progress()
 
     def plot_section_phrase_ranges(self):
@@ -424,8 +458,8 @@ class Section:
                 for inst in group.instruments:
                     ax.broken_barh([pb[p_index]], combs[p_index], \
                     color=(inst.color), alpha = (2/3) / len(group.instruments))
-        plt.ylim(24, 72)
-        plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
+        plt.ylim(24, 96)
+        plt.yticks(12 * (1 + np.arange(7)), ['C0','C1','C2','C3', 'C4', 'C5', 'C6'])
         plt.xlim(self.start_time, self.start_time + self.duration)
         xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
@@ -516,7 +550,36 @@ class Section:
         plt.xlim(self.start_time, self.start_time + self.duration)
         plt.tight_layout()
         plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/phrase_nCVI_and_ranges.png')
-        plt.savefig(f'saves/figures/temporal_densities/nCVI_{str(self.section_num)}_and_range.png')
+        plt.savefig(f'saves/figures/nCVIs/nCVI_{str(self.section_num)}_and_range.png')
+        plt.close()
+
+    def plot_section_nCVIs(self):
+        fig = plt.figure(figsize = [10,4])
+        ax = fig.add_subplot(111)
+        for group in self.groups:
+            # print('prase td bounds: '+str([phrase.td_bounds for phrase in group.phrases]))
+            mins = [phrase.nCVI_bounds[0] for phrase in group.phrases]
+            extents = [phrase.nCVI_bounds[1] - phrase.nCVI_bounds[0] for phrase in group.phrases]
+            combs = np.array([[mins[i], extents[i]] for i in range(group.nop)])
+            # for lines
+            pb = np.array(group.phrase_bounds)
+            pb[:, 0] = pb[:, 0] + self.start_time
+            for p_index in range(group.nop):
+                for inst in group.instruments:
+                    # ax.broken_barh([pb[p_index]], combs[p_index], \
+                    # color=(inst.color), alpha=(1/3) / len(group.instruments))
+                    #plot actual nCVI
+                    # this should be refactored somehow ... really confusing
+                    plt.plot([[sum(pb[p_index][:i+1])] for i in range(2)], [group.phrases[p_index].nCVI for i in range(2)], \
+                    color=inst.color, alpha=1, linewidth=2 )
+        plt.ylim(0, self.rhythm_nCVI_max)
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        xlocs = plt.xticks()[0]
+        plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
+        plt.xlim(self.start_time, self.start_time + self.duration)
+        plt.tight_layout()
+        plt.savefig(f'saves/figures/sections/section_{str(self.section_num)}/phrase_nCVI.png')
+        plt.savefig(f'saves/figures/nCVIs/nCVI_{str(self.section_num)}.png')
         plt.close()
 
     def progress(self):
@@ -552,6 +615,8 @@ class Section:
         tm = self.td_max
         to = self.td_octaves
         rnm = self.rhythm_nCVI_max
+        vmax = self.vel_max
+        vmin = self.vel_min
         for i in range(self.nog):
             gp = self.grouping[i]
             ps = self.pitch_sets[i]
@@ -569,9 +634,12 @@ class Section:
             csw = self.cs_widths[i]
             csc = self.cs_centers[i]
             sti = self.stitches[i]
+            vw = self.vel_widths[i]
+            vc = self.vel_centers[i]
             g = Group(
                 gp, ps, sw[psi], i+1, rrs, rds, rss, rts, sn, st, dur, p, rw,  \
-                rc, fpr, tm, to, tw, tc, nw, nc, rnm, csw, csc, sti)
+                rc, fpr, tm, to, tw, tc, nw, nc, rnm, csw, csc, sti, vw, vc,   \
+                vmax, vmin)
             groups.append(g)
         self.groups = groups
 
@@ -643,8 +711,8 @@ class Piece:
     @auto_args
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
-        rhythm_nCVI_max, td_max, td_octaves, max_vel, rr_max, rdur_nCVI_max, \
-        rspread_nCVI_max, rtemp_density_min, rr_min):
+        rhythm_nCVI_max, td_max, td_octaves, vel_max, rr_max, rdur_nCVI_max, \
+        rspread_nCVI_max, rtemp_density_min, rr_min, vel_min):
         self.set_weights()
         self.section_durs = icsd(nos, section_dur_nCVI) * self.dur_tot
         self.set_midpoints()
@@ -656,8 +724,8 @@ class Piece:
         self.reg_widths, self.reg_centers = self.delegation()
         self.td_widths, self.td_centers = self.delegation()
         self.nCVI_widths, self.nCVI_centers = self.delegation()
-        # chord size
         self.cs_widths, self.cs_centers = self.delegation()
+        self.vel_widths, self.vel_centers = self.delegation()
         self.set_full_piece_range()
         self.make_sections()
         self.make_stitches()
@@ -705,8 +773,8 @@ class Piece:
                     for inst in group.instruments:
                         ax.broken_barh([pb[p_index]], combs[p_index], \
                         color=(inst.color), alpha = (2/3) / len(group.instruments))
-        plt.ylim(24, 72)
-        plt.yticks(12 * (2 + np.arange(5)), ['C1','C2','C3', 'C4', 'C5'])
+        plt.ylim(24, 96)
+        plt.yticks(12 * (1 + np.arange(7)), ['C0','C1','C2','C3', 'C4', 'C5', 'C6'])
         plt.xlim(0, self.dur_tot)
         xlocs = plt.xticks()[0]
         plt.xticks(xlocs, [secs_to_mins(i) for i in xlocs])
@@ -827,6 +895,8 @@ class Piece:
         tdm = self.td_max
         tdo = self.td_octaves
         rnm = self.rhythm_nCVI_max
+        vmax = self.vel_max
+        vmin = self.vel_min
         for i in range(nos):
             p = self.partitions[i]
             sdi = sd[i]
@@ -843,9 +913,12 @@ class Piece:
             nc = self.nCVI_centers[i]
             csw = self.cs_widths[i]
             csc = self.cs_centers[i]
+            vw = self.vel_widths[i]
+            vc = self.vel_centers[i]
             sec = Section(
                     c, ins, p, gcw, i+1, sdi, rr, rdn, rsn, rtd, nos, st, rw, \
-                    rc, fpr, tdm, tdo, tw, tc, nw, nc, rnm, csw, csc)
+                    rc, fpr, tdm, tdo, tw, tc, nw, nc, rnm, csw, csc, vw, vc, \
+                    vmax, vmin)
             sections.append(sec)
         self.sections = sections
 
@@ -890,7 +963,7 @@ class Piece:
     # for better or worse. (15 mins is a long time to notice a slowly morphing register shift)
     # bounded_probs: [1 - sectionwise; 2 - groupwise]
 
-    # # This worked fine, but got rid of so I could do exact thing for other p
+        # # This worked fine, but got rid of so I could do exact thing for other p
     # # parameters, such as td
     # def range_delegation(self):
     #     # probabilities deciding if groups within section are tied together or not

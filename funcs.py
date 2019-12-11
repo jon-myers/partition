@@ -70,7 +70,7 @@ def easy_midi_generator(notes, file_name, midi_inst_name):
     notes = sorted(notes, key=(lambda x: x[1]))
     score = pretty_midi.PrettyMIDI()
     instrument_program = pretty_midi.instrument_name_to_program(midi_inst_name)
-    instrument = pretty_midi.Instrument(program=instrument_program)
+    instrument = pretty_midi.Instrument(program=0)
     for n, note in enumerate(notes):
     #     for later_note in notes[n + 1:]:
     #         if later_note[0] == note[0]:
