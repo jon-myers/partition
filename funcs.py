@@ -66,19 +66,20 @@ def weighted_dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0
 
 
 def easy_midi_generator(notes, file_name, midi_inst_name):
-    # notes = [[int(i[0]), float(i[1]), float(i[2]), i[3]] for i in notes]
     notes = sorted(notes, key=(lambda x: x[1]))
     score = pretty_midi.PrettyMIDI()
     instrument_program = pretty_midi.instrument_name_to_program(midi_inst_name)
     instrument = pretty_midi.Instrument(program=0)
     for n, note in enumerate(notes):
-    #     for later_note in notes[n + 1:]:
-    #         if later_note[0] == note[0]:
-    #             note[2] = later_note[1] <= note[1] + note[2] and 0.9 * (later_note[1] - note[1])
-
-        note = pretty_midi.Note(velocity=(note[3]), pitch=(note[0]), start=(note[1]), end=(note[1] + note[2]))
+        if type(note[3]) == np.float64:
+            vel = np.int(np.round(127 * note[3]))
+        elif type(note[3]) == float:
+            vel = np.int(np.round(127 * note[3]))
+        elif type(note[3]) == int:
+            vel = note[3]
+        else: print(note[3])
+        note = pretty_midi.Note(velocity=vel, pitch=(note[0]), start=(note[1]), end=(note[1] + note[2]))
         instrument.notes.append(note)
-
     score.instruments.append(instrument)
     score.write(file_name)
 

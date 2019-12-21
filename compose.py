@@ -5,6 +5,7 @@ from funcs import incremental_create_section_durs as icsd
 from funcs import juiced_distribution_maker as jdm
 from funcs import *
 from math import log2, ceil
+import json
 
 class Instrument:
     """Object to collect all the relevant details of each individual instrument"""
@@ -32,7 +33,7 @@ class Instrument:
     def make_notes(self, note_stream, starts, durs, vels):
         for n_i, note in enumerate(note_stream):
             if note != 0:
-                self.notes.append([note, starts[n_i], durs[n_i], np.int(np.round(vels))])
+                self.notes.append([note, starts[n_i], durs[n_i], vels])
 
 class Phrase:
     """Contains parametric info and generative methods for phrases"""
@@ -738,7 +739,28 @@ class Piece:
         self.plot_piece_td_and_range()
         self.plot_piece_nCVI_and_range()
         self.plot_piece_td()
+        # not using midi anymore, but might be useful to have around, just in case!
         self.print_midi()
+        # new representation, better for SC playback, with rest or midi note + dur + vel
+        self.create_event_dur_score()
+        self.save_event_dur_score()
+
+    def create_event_dur_score(self):
+        """new representation, better for SC playback, with rest or midi note + dur + vel"""
+        for inst in self.instruments:
+            #[rest/midipitch, dur, vel]
+            inst_score=[]
+            running_clock = 0
+            for n, note in enumerate(inst.notes):
+                if type(note[0]) != int: inst.notes[n][0] = np.asscalar(note[0])
+                if type(note[1]) != int: inst.notes[n][1] = np.asscalar(note[1])
+                if type(note[2]) != int: inst.notes[n][2] = np.asscalar(note[2])
+                # if type(note[3]) != int: inst.notes[n][3] = np.asscalar(note[3])
+                if note[1] != running_clock:
+                    inst_score.append(['Rest()', note[1] - running_clock, 0])
+                inst_score.append([note[0], note[2], note[3]])
+                running_clock = note[1] + note[2]
+            inst.event_dur_score = inst_score
 
     def make_stitches(self):
         self.stitches = [[0 for i in range(len(section.grouping))] for section in self.sections]
@@ -752,6 +774,17 @@ class Piece:
                 else:
                     self.stitches[s_i][a.index(st)] = 2
                 self.stitches[s_i+1][b.index(st)] = 1
+
+    def save_event_dur_score(self):
+        path = 'saves/json/'
+        for inst in self.instruments:
+            json_string = json.dumps(inst.event_dur_score)
+            f = open(path+'inst_'+str(inst.instnum-1), "w")
+            f.write(json_string)
+            f.close()
+
+
+
 
     def print_midi(self):
         path = 'saves/midi/'

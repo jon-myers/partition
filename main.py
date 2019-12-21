@@ -22,22 +22,22 @@ td_mults = [(1/golden**0.15)**i for i in range(num_of_insts)]
 #
 insts = [Instrument(str(i), 24 + 2*i , 60 + 2*i, i+1, cols[inds[i]], td_mults[::-1][i], 'Trumpet') for i in range(num_of_insts)]
 
-dur_tot = 14 * 60
-chord = [0, 2, 3, 5, 7, 8, 10]
+dur_tot = 10 * 60
+chord = [0,2,3,5,7,8,10]
 # insts = [tr1, tr2, hn, trb, btrb]
 # number of sections (6 - 12)
-nos = 6 + np.random.choice(np.arange(6))
+nos = 5 + np.random.choice(np.arange(5))
 # root structure nCVI - or root structure "wobble"
-rsw = np.random.uniform(5, 20)
+rsw = 20
 # event level rhythmic wobble
-rhythm_nCVI_max = 15
+rhythm_nCVI_max = 20
 # minimum temporal density
 td_max = 10
 # "octaves" of temporal density, "below" td_max
-td_oct = 5
+td_oct = 10
 # dynamics
-vel_max = 100
-vel_min = 20
+vel_max = 0.8
+vel_min = 0.2
 # minimum rest ratio
 rr_min = 0.25
 # maximum rest ratio
