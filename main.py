@@ -8,9 +8,9 @@ from compose import Instrument, Piece
 from funcs import golden
 cols = mcolors.CSS4_COLORS
 keys = list(cols.keys())
-inds = np.random.choice(keys, size=16, replace=False)
 
-num_of_insts = 12
+num_of_insts = 16
+inds = np.random.choice(keys, size=num_of_insts, replace=False)
 td_mults = [(1/golden**0.15)**i for i in range(num_of_insts)]
 # print(td_mults)
 #
