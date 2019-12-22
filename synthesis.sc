@@ -43,15 +43,16 @@ s.boot;
 //Make the SynthDefs
 size(~notes).do({arg index;
 	SynthDef(("\inst_"++index.asString).asSymbol, { |out, freq = 440, sustain = 1, amp|
-		var sig, env, amps = ~amps[index], envSpec = ~envSpecs[index];
+		var sig, ampEnv, lpFreq, amps = ~amps[index], ampEnvSpec = ~envSpecs[index];
 		freq = freq * (1 + (0.01.rand - 0.005));
-		env = ~makeEnv.value(sustain, envSpec);
+		ampEnv = ~makeEnv.value(sustain, ampEnvSpec);
+		lpFreq = 400 * (2**(5.0.rand));
 		sig = SinOsc.ar(freq, 0, amps[0]);
 		sig = sig + LFTri.ar(freq, 0, amps[1]);
 		sig = sig + LFSaw.ar(freq, 0, amps[2]);
 		sig = sig + LFPulse.ar(freq, 0, amps[3]);
-		sig = sig * amp * EnvGen.kr(env, doneAction: Done.freeSelf);
-		sig = BLowPass.ar(sig,3000,0.5);
+		sig = sig * amp * EnvGen.kr(ampEnv, doneAction: Done.freeSelf);
+		sig = BLowPass.ar(sig,lpFreq);
 		sig = BHiPass.ar(sig, 100);
 		Out.ar(out, sig ! 2)
 	}).add;
@@ -72,3 +73,4 @@ size(~notes).do({arg index;
 Ppar(~pbinds).play;
 );
 
+200 * (2**6.5)
