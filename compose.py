@@ -713,7 +713,7 @@ class Piece:
     def __init__(
         self, dur_tot, chord, instruments, nos, section_dur_nCVI, \
         rhythm_nCVI_max, td_max, td_octaves, vel_max, rr_max, rdur_nCVI_max, \
-        rspread_nCVI_max, rtemp_density_min, rr_min, vel_min):
+        rspread_nCVI_max, rtemp_density_min, rr_min, vel_min, ratios):
         self.set_weights()
         self.section_durs = icsd(nos, section_dur_nCVI) * self.dur_tot
         self.set_midpoints()
@@ -752,13 +752,15 @@ class Piece:
             inst_score=[]
             running_clock = 0
             for n, note in enumerate(inst.notes):
+                freq = mp_to_adjusted_freq(note[0], self.ratios)
+                if type(freq) != int: freq = np.asscalar(freq)
                 if type(note[0]) != int: inst.notes[n][0] = np.asscalar(note[0])
                 if type(note[1]) != int: inst.notes[n][1] = np.asscalar(note[1])
                 if type(note[2]) != int: inst.notes[n][2] = np.asscalar(note[2])
                 # if type(note[3]) != int: inst.notes[n][3] = np.asscalar(note[3])
                 if note[1] != running_clock:
                     inst_score.append(['Rest()', note[1] - running_clock, 0])
-                inst_score.append([note[0], note[2], note[3]])
+                inst_score.append([freq, note[2], note[3]])
                 running_clock = note[1] + note[2]
             inst.event_dur_score = inst_score
 
@@ -782,9 +784,6 @@ class Piece:
             f = open(path+'inst_'+str(inst.instnum-1), "w")
             f.write(json_string)
             f.close()
-
-
-
 
     def print_midi(self):
         path = 'saves/midi/'

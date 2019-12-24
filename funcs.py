@@ -32,6 +32,9 @@ def dc_alg(choices, epochs, alpha=1.0, weights=0, counts=0, verbosity=0):
 def hz_to_cents(hz, root):
     return 1200 * np.log2(hz / root)
 
+def cents_to_hz(cents, root):
+    return root * (2 ** (cents / 1200))
+
 def dc_weight_finder(choices, alpha, weights, test_epochs=500):
     choices = np.arange(len(choices))
     weights_ = [i / sum(weights) for i in weights]
@@ -257,7 +260,7 @@ def get_rspread_nCVI(rspread_nCVI_max):
     return np.random.uniform(0, rspread_nCVI_max)
 
 
-def get_rtemp_density(rtemp_density_min=5, octaves=3):
+def get_rtemp_density(rtemp_density_min, octaves=4):
     return rtemp_density_min * 2 ** np.random.uniform(0, octaves)
 
 
@@ -305,3 +308,41 @@ golden = (1 + 5**0.5) / 2
 
 def fill_space(text):
     return text.replace(' ', '_')
+def ratio_to_cents(ratio):
+    return np.round(np.log2(np.array(ratio)) * 1200).astype(int)
+
+def cent_array_to_pc(cent_array):
+    pc = np.round(cent_array/100).astype(int)
+    devs = cent_array - (100*pc)
+    if np.size(pc) != np.size(np.unique(pc)):
+        print('here')
+        pc = []
+        devs = []
+        print(cent_array)
+        for cent in cent_array:
+            next = np.round((cent/100).astype(int))
+            if next in pc:
+                next += 1
+            dev = cent - (100 * next)
+            pc.append(next)
+            devs.append(dev)
+    pc = np.array(pc)
+    devs = np.array(devs)
+    return pc, devs
+
+def cents_to_hz(cents, root):
+    return root * (2 ** (cents / 1200))
+
+def mp_to_freq(mp):
+    return (2**((mp-81)/12)) * 440
+
+def mp_to_adjusted_freq(mp, ratios):
+    cents = ratio_to_cents(ratios)
+    pc, devs = cent_array_to_pc(cents)
+    dev = devs[np.where(pc == mp%12)]
+    freq = mp_to_freq(mp)
+    adjusted_freq = freq + cents_to_hz(dev, freq)
+    return adjusted_freq
+
+def mps_to_adjusted_freqs(mps, ratios):
+    return np.array([mp_to_adjusted_freq(mp, ratios) for mp in mps])
