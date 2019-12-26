@@ -342,6 +342,9 @@ def mp_to_adjusted_freq(mp, ratios):
     dev = devs[np.where(pc == mp%12)]
     freq = mp_to_freq(mp)
     adjusted_freq = freq + cents_to_hz(dev, freq)
+    if adjusted_freq < 20:
+        print(mp)
+        print(adjusted_freq)
     return adjusted_freq
 
 def mps_to_adjusted_freqs(mps, ratios):

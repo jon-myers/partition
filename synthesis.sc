@@ -1,5 +1,13 @@
+
+~decoder = FoaDecoderKernel.newSpherical;
+
+~renderDecode = { arg in;FoaDecode.ar(in, ~decoder)};
+
+
 (
 s.boot;
+// bus for ambisonic audio
+~fumaBus = Bus.audio(s, 4);
 ~notes = Array.fill(16, {arg i;
 	f = File.open("/Users/Jon/Documents/2019/partition/saves/json/inst_" ++ i.asString, "r");
 	z = f.readAllString.compile.value;
@@ -7,7 +15,10 @@ s.boot;
 	z;
 	});
 
-~midi_pitches = Array.fill(size(~notes), {arg i; Array.fill(~notes[i].size, {arg j;
+~verbBusArray = Array.fill(size(~notes), {Bus.audio(s,1)});
+
+
+~freqs = Array.fill(size(~notes), {arg i; Array.fill(~notes[i].size, {arg j;
 	if (~notes[i][j][0].class == String, {Rest()}, {~notes[i][j][0]});
 })});
 ~durs = Array.fill(size(~notes), {arg i; Array.fill(~notes[i].size, {arg j; ~notes[i][j][1]})});
@@ -16,7 +27,7 @@ s.boot;
 ~makeAmpEnvSpec = {arg maxRamps=5;
 	var attack, decay, points, dur, durs, curves;
 	attack = (2**(4.0.rand)) / (2**6);
-	decay = (2**(4.0.rand)) / (2**5);
+	decay = (2**(4.0.rand)) / (2**6);
 	points = (maxRamps-1).rand+2;
 	points = Array.fill(points, {0.5.rand+0.5});
 	points = points / points.maxItem();
@@ -41,11 +52,11 @@ s.boot;
 };
 
 
-~makeLpEnvSpec = {arg maxRamps=4;
+~makeLpEnvSpec = {arg maxRamps=1;
 	var points, durs, curves;
 	points = (maxRamps-1).rand + 2;
-	points = Array.fill(points, {400.0 * (2.0 ** (5.0.rand))});
-	durs = Array.fill(size(points), {1.0.rand}).normalizeSum;
+	points = Array.fill(points, {400.0 * (2.0 ** (4.0.rand))});
+	durs = Array.fill(size(points), {arg i; if (i < 2, {1.0.rand}, {0.5.rand})}).normalizeSum;
 	curves = Array.fill(size(points)-1, {8.0.rand - 4});
 	[points, durs, curves];
 };
@@ -66,9 +77,8 @@ size(~notes).do({arg index;
 		lpFreqEnv = ~makeLpEnv.value(sustain, lpFreqSpec);
 		amps = ~amps[index];
 		ampEnvSpec = ~ampEnvSpecs[index];
-		freq = freq * (1 + (0.01.rand - 0.005));
+		freq = freq * (1 + (0.001.rand - 0.0005));
 		ampEnv = ~makeAmpEnv.value(sustain, ampEnvSpec);
-		// lpFreq = 400 * (2**(5.0.rand));
 		sig = SinOsc.ar(freq, 0, amps[0]);
 		sig = sig + LFTri.ar(freq, 0, amps[1]);
 		sig = sig + LFSaw.ar(freq, 0, amps[2]);
@@ -76,30 +86,51 @@ size(~notes).do({arg index;
 		sig = sig * amp * EnvGen.kr(ampEnv, doneAction: Done.freeSelf);
 		sig = BLowPass.ar(sig,EnvGen.kr(lpFreqEnv));
 		sig = BHiPass.ar(sig, 100);
-		sig = FreeVerb.ar(sig, 0.5, 0.75);
-		Out.ar(out, sig ! 2)
+		// sig = FreeVerb.ar(sig);
+		// sig = PanB.ar(sig, ((index/size(~notes)) * 2 * pi) - pi);
+		Out.ar(~verbBusArray[index], sig)
+		// Out.ar(~fumaBus, sig)
 	}).add;
 });
 
+
+~verbSynthNames = Array.fill(size(~notes), {arg i; ("verb_"++i.asString).asSymbol});
+
+//make the reverb bus synthdefs; space them evenly around the circle
+size(~notes).do({arg index;
+	SynthDef.new(~verbSynthNames[index], {
+		var sig;
+		sig = ~verbBusArray[index].ar(1);
+		sig = FreeVerb.ar(sig);
+		sig = PanB.ar(sig, ((index/size(~notes)) * 2 * pi) - pi);
+		Out.ar(~fumaBus, sig)
+	}).add
+});
+
+SynthDef.new(\busPlayer, {
+	var sig = ~fumaBus.ar(4);
+	Out.ar(0, ~renderDecode.value(sig));
+}).add;
+
 ~synthNames = Array.fill(size(~notes), {arg i; ("\inst_"++i.asString).asSymbol});
+
 
 (
 ~pbinds = Array.fill(~notes.size, {arg i;
 	Pbind(
 		\instrument, ~synthNames[i],
-		\midinote, Pseq(~midi_pitches[i]),
+		\freq, Pseq(~freqs[i]),
 		\dur, Pseq(~durs[i]),
 	)
 });
 );
-
-Ppar(~pbinds).play;
 );
 
 
 
+x = Synth(\busPlayer);
+size(~notes).do({arg index; Synth(~verbSynthNames[index])});
 
-//to do:
-//make sure filter volume reduction is somehow compensated for. ??
-//tuning system
-//dynes in python code (different every note?)
+Ppar(~pbinds).play;
+
+x.free

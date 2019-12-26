@@ -100,19 +100,20 @@ class Phrase:
         for nm_i, inst_pcs in enumerate(note_matrix):
             for pc_i, pc in enumerate(inst_pcs):
                 if pc != 0:
-                    choices = [pc + 12*i for i in range(6) if pc+12*i in self.register]
+                    choices = [pc + 12*i for i in range(10) if pc+12*i in self.register]
                     choices = [i for i in choices if i in self.instruments[nm_i].range]
                     if len(choices) == 0:
-                        continue
+                        note_matrix[nm_i,pc_i] = 0
                     elif 'prev' in locals():
                         diffs = np.abs(choices - prev)+6
                         weights = 1/diffs
                         weights /= np.sum(weights)
                         # print(weights)
                         prev = np.random.choice(choices, p = weights)
+                        note_matrix[nm_i,pc_i] = prev
                     else:
                         prev = np.random.choice(choices)
-                    note_matrix[nm_i,pc_i] = prev
+                        note_matrix[nm_i,pc_i] = prev
         self.note_matrix = note_matrix
 
     def make_note_streams(self):
@@ -123,7 +124,6 @@ class Phrase:
             choice_list = [[self.pitch_set[i] for j in range(int(ceil(self.weights_[i] * ns_len)))] for i in range(len(self.pitch_set))]
             choice_list = [i for i in itertools.chain.from_iterable(choice_list)]
             self.note_stream = np.random.choice(choice_list, replace=False, size = ns_len)
-
 
     def make_cs_array(self):
         if self.noi == 1:
